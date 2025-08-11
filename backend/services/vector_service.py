@@ -324,3 +324,98 @@ class VectorService:
             "metadata_size": len(self.metadata) if hasattr(self, 'metadata') else 0,
             "min_similarity_threshold": self.min_similarity_threshold
         }
+    
+    def search_by_topics(self, topics: List[str], conversation_id: Optional[str] = None, k: int = 3) -> List[Dict]:
+        """
+        Search for messages related to specific topics
+        
+        Args:
+            topics: List of topics to search for
+            conversation_id: Optional conversation ID to filter by
+            k: Number of results per topic
+        
+        Returns:
+            List of relevant messages grouped by topic
+        """
+        try:
+            all_results = []
+            
+            for topic in topics:
+                # Search for each topic
+                topic_results = self.search_similar_messages(
+                    query=topic,
+                    conversation_id=conversation_id,
+                    k=k,
+                    min_score=0.3
+                )
+                
+                # Add topic information to results
+                for result in topic_results:
+                    result['topic'] = topic
+                    result['topic_relevance'] = result['score']
+                
+                all_results.extend(topic_results)
+            
+            # Remove duplicates and sort by relevance
+            unique_results = {}
+            for result in all_results:
+                key = f"{result['conversation_id']}_{result['message_id']}"
+                if key not in unique_results or result['score'] > unique_results[key]['score']:
+                    unique_results[key] = result
+            
+            # Sort by score and return top results
+            sorted_results = sorted(unique_results.values(), key=lambda x: x['score'], reverse=True)
+            return sorted_results[:k * len(topics)]
+            
+        except Exception as e:
+            logger.error(f"Error in topic-based search: {e}")
+            return []
+    
+    def get_conversation_summary(self, conversation_id: str, k: int = 5) -> Dict:
+        """
+        Get a summary of key messages from a conversation
+        
+        Args:
+            conversation_id: ID of the conversation
+            k: Number of key messages to return
+        
+        Returns:
+            Dictionary with conversation summary
+        """
+        try:
+            # Get all messages for this conversation
+            conversation_messages = [
+                metadata for metadata in self.metadata 
+                if metadata['conversation_id'] == conversation_id
+            ]
+            
+            if not conversation_messages:
+                return {"error": "No messages found for conversation"}
+            
+            # Get user questions
+            user_messages = [
+                msg for msg in conversation_messages 
+                if msg['role'] == 'user'
+            ]
+            
+            # Get assistant responses
+            assistant_messages = [
+                msg for msg in conversation_messages 
+                if msg['role'] == 'assistant'
+            ]
+            
+            # Get recent messages
+            recent_messages = sorted(conversation_messages, key=lambda x: x['timestamp'])[-k:]
+            
+            return {
+                "total_messages": len(conversation_messages),
+                "user_messages": len(user_messages),
+                "assistant_messages": len(assistant_messages),
+                "recent_messages": recent_messages,
+                "last_user_question": user_messages[-1]['content_preview'] if user_messages else None,
+                "conversation_start": conversation_messages[0]['timestamp'] if conversation_messages else None
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting conversation summary: {e}")
+            return {"error": str(e)}

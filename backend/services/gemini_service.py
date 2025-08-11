@@ -1,7 +1,7 @@
 import google.generativeai as genai
 import logging
 import time
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from pydantic import BaseModel
 from .vector_service import VectorService
 
@@ -48,41 +48,140 @@ class GeminiService:
             return f"You are a tutor named {bot_name}, acting as {persona_desc}. Help the user with their questions. Use markdown formatting for your output."
         return "You are a helpful AI assistant. Use markdown formatting for your output."
     
-    def get_relevant_context(self, query: str, conversation_id: Optional[str] = None, k: int = 5) -> str:
-        """Enhanced context retrieval with better filtering and formatting"""
-        if not self.vector_service:
-            return ""
+    def analyze_conversation_topics(self, messages: List[ChatMessage]) -> List[str]:
+        """Analyze conversation to extract key topics and themes"""
+        if not messages or len(messages) < 2:
+            return []
         
         try:
-            # Search with lower threshold for more results
-            similar_messages = self.vector_service.search_similar_messages(
-                query, conversation_id, k=k, min_score=0.2
-            )
+            # Create a summary of the conversation for topic analysis
+            conversation_summary = "\n".join([
+                f"{msg.role}: {msg.content}" for msg in messages[-10:]  # Last 10 messages
+            ])
             
-            if not similar_messages:
-                return ""
+            # Use Gemini to extract topics
+            topic_prompt = f"""
+Analyze this conversation and extract the main topics, themes, and subjects discussed. 
+Focus on educational topics, concepts, and areas of learning.
+
+Conversation:
+{conversation_summary}
+
+Extract 3-5 key topics as simple phrases (e.g., "Python programming", "Data structures", "Machine learning basics").
+Return only the topics, one per line, no numbering or formatting.
+"""
             
-            # Sort by relevance and recency
-            similar_messages.sort(key=lambda x: (x['score'], x['timestamp']), reverse=True)
+            response = self.model.generate_content(topic_prompt)
+            topics = [topic.strip() for topic in response.text.split('\n') if topic.strip()]
             
-            # Format context with better structure
-            context_parts = []
-            for msg in similar_messages:
-                role = "User" if msg['role'] == 'user' else "Assistant"
-                content = msg['content_preview']
-                score = msg['score']
-                context_parts.append(f"{role} (relevance: {score:.2f}): {content}")
-            
-            context = "\n".join(context_parts)
-            logger.info(f"Retrieved {len(similar_messages)} relevant context messages for query: {query[:50]}...")
-            return context
+            logger.info(f"Extracted topics: {topics}")
+            return topics
             
         except Exception as e:
-            logger.error(f"Error retrieving context: {e}")
-            return ""
+            logger.error(f"Error analyzing conversation topics: {e}")
+            return []
+    
+    def get_intelligent_context(self, query: str, messages: List[ChatMessage], conversation_id: Optional[str] = None) -> Tuple[str, Dict]:
+        """Enhanced context retrieval with intelligent analysis"""
+        if not self.vector_service:
+            return "", {}
+        
+        try:
+            context_info = {
+                "topics_discussed": [],
+                "last_questions": [],
+                "relevant_context": [],
+                "context_strategy": "none"
+            }
+            
+            # Strategy 1: Analyze conversation topics
+            if len(messages) > 2:
+                topics = self.analyze_conversation_topics(messages)
+                context_info["topics_discussed"] = topics
+                
+                # Search for messages related to these topics using topic-based search
+                topic_contexts = self.vector_service.search_by_topics(
+                    topics[:3], conversation_id, k=2
+                )
+                
+                if topic_contexts:
+                    context_info["context_strategy"] = "topic_based"
+                    context_info["relevant_context"] = topic_contexts
+            
+            # Strategy 2: Get recent questions and answers
+            recent_messages = self.vector_service.search_similar_messages(
+                query, conversation_id, k=3, min_score=0.25
+            )
+            
+            # Extract last few questions from the conversation
+            user_messages = [msg for msg in messages[-6:] if msg.role == 'user']
+            if user_messages:
+                context_info["last_questions"] = [msg.content for msg in user_messages[-3:]]
+            
+            # Strategy 3: Direct semantic search for current query
+            direct_context = self.vector_service.search_similar_messages(
+                query, conversation_id, k=2, min_score=0.4
+            )
+            
+            # Combine all context strategies
+            all_context = []
+            
+            # Add topic-based context
+            if context_info["relevant_context"]:
+                all_context.extend(context_info["relevant_context"])
+            
+            # Add direct semantic context
+            if direct_context:
+                all_context.extend(direct_context)
+            
+            # Remove duplicates and sort by relevance
+            unique_context = {}
+            for ctx in all_context:
+                key = f"{ctx['role']}_{ctx['content_preview'][:50]}"
+                if key not in unique_context or ctx['score'] > unique_context[key]['score']:
+                    unique_context[key] = ctx
+            
+            sorted_context = sorted(unique_context.values(), key=lambda x: x['score'], reverse=True)
+            
+            # Format the context intelligently
+            context_parts = []
+            
+            # Add conversation summary if we have topics
+            if context_info["topics_discussed"]:
+                topics_str = ", ".join(context_info["topics_discussed"][:3])
+                context_parts.append(f"**Conversation Topics:** {topics_str}")
+                context_parts.append("")
+            
+            # Add recent questions if available
+            if context_info["last_questions"]:
+                context_parts.append("**Recent Questions:**")
+                for i, question in enumerate(context_info["last_questions"][-2:], 1):
+                    context_parts.append(f"{i}. {question}")
+                context_parts.append("")
+            
+            # Add relevant context messages
+            if sorted_context:
+                context_parts.append("**Relevant Context:**")
+                for ctx in sorted_context[:4]:  # Limit to 4 most relevant
+                    role = "User" if ctx['role'] == 'user' else "Assistant"
+                    content = ctx['content_preview']
+                    context_parts.append(f"• {role}: {content}")
+            
+            context = "\n".join(context_parts)
+            logger.info(f"Retrieved intelligent context using strategy: {context_info['context_strategy']}")
+            
+            return context, context_info
+            
+        except Exception as e:
+            logger.error(f"Error retrieving intelligent context: {e}")
+            return "", {"context_strategy": "error", "error": str(e)}
+    
+    def get_relevant_context(self, query: str, conversation_id: Optional[str] = None, k: int = 5) -> str:
+        """Legacy method - now uses intelligent context"""
+        return self.get_intelligent_context(query, [], conversation_id)[0]
     
     def generate_response(self, messages: List[ChatMessage], persona: Optional[Dict] = None, conversation_id: Optional[str] = None) -> Dict:
-        """Enhanced response generation with better RAG integration"""
+        """Enhanced response generation with intelligent RAG integration"""
         try:
             start_time = time.time()
             
@@ -92,24 +191,25 @@ class GeminiService:
             # Get the latest user message
             latest_message = messages[-1].content if messages else ""
             
-            # Retrieve relevant context using RAG
-            context = self.get_relevant_context(latest_message, conversation_id, k=5)
+            # Get intelligent context
+            context, context_info = self.get_intelligent_context(latest_message, messages, conversation_id)
             
-            # Build enhanced prompt with context
+            # Build enhanced prompt with intelligent context
             if context:
                 context_prompt = f"""
-Relevant conversation context (use this to provide more contextual and consistent responses):
+**Conversation Context:**
 {context}
 
-Current user question: {latest_message}
+**Current Question:** {latest_message}
 
-Instructions:
-1. Use the context above to provide relevant and contextual responses
-2. If the context contains relevant information, reference it appropriately
-3. Maintain consistency with previous responses in the conversation
-4. If no relevant context is found, provide a general helpful response
+**Instructions:**
+1. Use the conversation context above to provide relevant and contextual responses
+2. Reference previous topics and questions when appropriate
+3. Maintain consistency with the conversation flow
+4. If the context shows the user is learning about specific topics, tailor your response accordingly
+5. Build upon previous explanations and avoid repetition
 
-Please respond:"""
+Please provide a helpful response:"""
                 full_prompt = f"{system_prompt}\n\n{context_prompt}\n\nAssistant:"
             else:
                 # No context found, use direct approach
@@ -136,7 +236,8 @@ Please respond:"""
                 "response_time": response_time,
                 "tokens_used": tokens_used,
                 "success": True,
-                "context_used": bool(context)  # Track if context was used
+                "context_used": bool(context),
+                "context_info": context_info  # Include context analysis info
             }
             
         except Exception as e:
@@ -147,7 +248,8 @@ Please respond:"""
                 "tokens_used": None,
                 "success": False,
                 "error": str(e),
-                "context_used": False
+                "context_used": False,
+                "context_info": {"context_strategy": "error", "error": str(e)}
             }
     
     def validate_api_key(self) -> bool:

@@ -44,8 +44,6 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",  # Local development
-        "https://daksh204singh.github.io",  # GitHub Pages
-        "https://daksh204singh.github.io/mini-task-botbuilder",  # GitHub Pages with repo name
         "http://152.7.177.154",  # VCL server
         "http://152.7.177.154:80",  # VCL server with port
         os.getenv("FRONTEND_URL", "http://localhost:3000")  # Environment variable

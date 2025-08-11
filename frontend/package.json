@@ -2,7 +2,6 @@
   "name": "frontend",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://daksh204singh.github.io/mini-task-botbuilder",
   "dependencies": {
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.6.4",
@@ -24,8 +23,6 @@
     "dev": "REACT_APP_USE_PROD_BACKEND=false react-scripts start",
     "dev:prod": "REACT_APP_USE_PROD_BACKEND=true react-scripts start",
     "build": "react-scripts build",
-    "build:dev": "REACT_APP_USE_PROD_BACKEND=false react-scripts build",
-    "build:prod": "REACT_APP_USE_PROD_BACKEND=true react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },

@@ -1,99 +1,91 @@
-# 🚀 Development Guide
+# 🚀 Mini-task Frontend Development Guide
 
-## **Environment Configuration**
+## **Development Modes**
 
-The Mini-task frontend supports multiple development modes to work with different backend configurations.
+The frontend supports different development modes for testing with local or production backends.
 
-## **Available Modes**
-
-### **1. Local Development (Default)**
+### **Local Development Mode**
+```bash
+cd frontend
+npm run dev
+```
 - **Frontend**: `http://localhost:3000`
 - **Backend**: `http://localhost:8000`
 - **Use Case**: Full local development with local backend
 
+### **Production Backend Mode**
 ```bash
-# Start with local backend
-npm run dev
-# or
-./scripts/dev.sh
+cd frontend
+npm run dev:prod
 ```
-
-### **2. Local Frontend + Production Backend**
 - **Frontend**: `http://localhost:3000`
 - **Backend**: `http://152.7.177.154:8000` (VCL Server)
-- **Use Case**: Test frontend changes against production backend
+- **Use Case**: Test frontend locally with production backend
 
+### **Standard Mode**
 ```bash
-# Start with production backend
-npm run dev:prod
-# or
-./scripts/prod-local.sh
+cd frontend
+npm start
 ```
-
-### **3. Production Build**
-- **Frontend**: GitHub Pages
-- **Backend**: `http://152.7.177.154:8000` (VCL Server)
-- **Use Case**: Production deployment
-
-```bash
-# Build for production
-npm run build:prod
-```
+- **Frontend**: `http://localhost:3000`
+- **Backend**: `http://localhost:8000` (default)
+- **Use Case**: Standard React development
 
 ## **Environment Variables**
 
-The application automatically detects the environment and uses the appropriate backend URL:
+### **REACT_APP_USE_PROD_BACKEND**
+- `false` (default): Use localhost backend
+- `true`: Use VCL server backend
 
-- **Development**: Uses `localhost:8000`
-- **GitHub Pages**: Uses `152.7.177.154:8000`
-- **Custom**: Set `REACT_APP_USE_PROD_BACKEND=true` to force production backend
+## **Configuration**
 
-## **Configuration Files**
+The API URL is automatically configured based on environment variables in `src/config.ts`:
 
-- `src/config.ts` - Main configuration logic
-- `.env.development` - Development environment variables
-- `.env.production` - Production environment variables
+```typescript
+// Check if we're running locally but want to use production backend
+if (process.env.REACT_APP_USE_PROD_BACKEND === 'true') {
+  return 'http://152.7.177.154:8000';
+}
 
-## **Quick Start**
+// Default to localhost for development
+return 'http://localhost:8000';
+```
 
-1. **For local development**:
-   ```bash
-   cd frontend
-   npm run dev
-   ```
+## **Deployment**
 
-2. **For testing against production backend**:
-   ```bash
-   cd frontend
-   npm run dev:prod
-   ```
+### **VCL Server Deployment**
+The backend is deployed on the VCL server at `152.7.177.154:8000` and is accessible for testing.
 
-3. **For production build**:
-   ```bash
-   cd frontend
-   npm run build:prod
-   ```
+### **Local Development**
+For full local development, run both frontend and backend locally:
 
-## **Backend Requirements**
+```bash
+# Terminal 1: Backend
+cd backend
+python main.py
 
-### **Local Backend**
-- Must be running on `http://localhost:8000`
-- Start with: `cd backend && python run.py`
-
-### **Production Backend**
-- Running on VCL server: `http://152.7.177.154:8000`
-- Status check: `curl http://152.7.177.154:8000/health`
+# Terminal 2: Frontend
+cd frontend
+npm run dev
+```
 
 ## **Troubleshooting**
 
-### **CORS Issues**
-- Ensure backend CORS is configured for your frontend URL
-- Check browser console for CORS errors
+### **Backend Connection Issues**
+- Check if backend is running on localhost:8000
+- Verify VCL server is accessible at 152.7.177.154:8000
+- Check browser console for API URL configuration
 
-### **Connection Issues**
-- Verify backend is running on the expected port
-- Check firewall settings for production backend
-
-### **Environment Detection**
+### **Environment Issues**
+- Clear browser cache if switching between modes
+- Restart development server after changing environment variables
 - Check browser console for logged API URL
-- Verify `NODE_ENV` and `REACT_APP_USE_PROD_BACKEND` values
+
+## **API Configuration Debugging**
+
+The application logs configuration details to the browser console:
+- Environment variables
+- Selected API URL
+- Full API endpoint examples
+
+Check the browser console (F12) for debugging information.
