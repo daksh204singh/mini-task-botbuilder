@@ -350,6 +350,9 @@ function App() {
   };
 
   const handleBotCreation = async (botConfig: BotConfig) => {
+    // Show loading state immediately
+    setIsLoading(true);
+    
     setCurrentBotConfig(botConfig);
     setShowBotModal(false);
     
@@ -370,9 +373,6 @@ function App() {
     setChats(prev => [...prev, newChat]);
     setActiveChatId(newChat.id);
     
-    // Show loading state
-    setIsLoading(true);
-    
     try {
       // Call backend API for welcome message
       const response = await fetch('http://localhost:8000/chat', {
@@ -380,12 +380,12 @@ function App() {
         headers: {
           'Content-Type': 'application/json',
         },
-                  body: JSON.stringify({
-            messages: [{
-              role: 'user',
-              content: 'Please introduce yourself as a new tutor and welcome the user to start a conversation.',
-              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            }],
+        body: JSON.stringify({
+          messages: [{
+            role: 'user',
+            content: 'Please introduce yourself as a new tutor and welcome the user to start a conversation.',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }],
           persona: {
             bot_name: botConfig.name,
             persona: botConfig.persona,
