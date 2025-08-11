@@ -380,12 +380,12 @@ function App() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          messages: [{
-            role: 'user',
-            content: 'Please introduce yourself as a new chatbot and welcome the user to start a conversation.',
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          }],
+                  body: JSON.stringify({
+            messages: [{
+              role: 'user',
+              content: 'Please introduce yourself as a new tutor and welcome the user to start a conversation.',
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            }],
           persona: {
             bot_name: botConfig.name,
             persona: botConfig.persona,

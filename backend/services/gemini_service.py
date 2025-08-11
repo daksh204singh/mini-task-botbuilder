@@ -36,7 +36,7 @@ class GeminiService:
         if persona:
             bot_name = persona.get('bot_name', 'Assistant')
             persona_desc = persona.get('persona', 'a helpful assistant')
-            return f"You are a chatbot named {bot_name}, acting as {persona_desc}. Help the user with their questions. Use markdown formatting for your output."
+            return f"You are a tutor named {bot_name}, acting as {persona_desc}. Help the user with their questions. Use markdown formatting for your output."
         return "You are a helpful AI assistant. Use markdown formatting for your output."
     
     def generate_response(self, messages: List[ChatMessage], persona: Optional[Dict] = None) -> Dict:
