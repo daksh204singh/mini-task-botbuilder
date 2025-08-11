@@ -22,11 +22,6 @@ class GeminiService:
         """Format messages for Gemini API"""
         conversation = []
         
-        # Add persona as system message if provided
-        if persona:
-            system_prompt = f"You are a chatbot named {persona.get('bot_name', 'Assistant')}, acting as {persona.get('persona', 'a helpful assistant')}. Help the user with their questions. Use markdown formatting for your output."
-            conversation.append({"role": "user", "parts": [system_prompt]})
-        
         # Convert messages to Gemini format
         for msg in messages:
             if msg.role == "user":
@@ -36,26 +31,38 @@ class GeminiService:
         
         return conversation
     
-    def generate_response(self, messages: List[ChatMessage], persona: Optional[str] = None) -> Dict:
+    def get_system_prompt(self, persona: Optional[Dict] = None) -> str:
+        """Generate system prompt based on persona"""
+        if persona:
+            bot_name = persona.get('bot_name', 'Assistant')
+            persona_desc = persona.get('persona', 'a helpful assistant')
+            return f"You are a chatbot named {bot_name}, acting as {persona_desc}. Help the user with their questions. Use markdown formatting for your output."
+        return "You are a helpful AI assistant. Use markdown formatting for your output."
+    
+    def generate_response(self, messages: List[ChatMessage], persona: Optional[Dict] = None) -> Dict:
         """Generate response using Gemini API"""
         try:
             start_time = time.time()
+            
+            # Get system prompt
+            system_prompt = self.get_system_prompt(persona)
             
             # Format conversation
             conversation = self.format_conversation(messages, persona)
             
             # Start chat with history
             if len(conversation) > 1:
-                # If we have a persona, skip the first message (system prompt) for history
-                history_start = 1 if persona else 0
-                chat = self.model.start_chat(history=conversation[history_start:-1])
+                # Create chat with system prompt
+                chat = self.model.start_chat(history=conversation[:-1])
                 
                 # Send the latest message
                 latest_message = conversation[-1]["parts"][0]
                 response = chat.send_message(latest_message)
             else:
-                # Single message, no history
-                response = self.model.generate_content(conversation[0]["parts"][0])
+                # Single message, combine system prompt with user message
+                user_message = conversation[0]["parts"][0]
+                full_prompt = f"{system_prompt}\n\nUser: {user_message}\n\nAssistant:"
+                response = self.model.generate_content(full_prompt)
             
             response_time = time.time() - start_time
             
