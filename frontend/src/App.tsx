@@ -8,6 +8,9 @@ import BotCreationModal, { BotConfig } from './components/BotCreationModal';
 import { Message } from './components/MessageBubble';
 import LogsPanel, { LogEntry } from './components/LogsPanel';
 
+// API base URL - points to the deployed backend server
+const API_BASE_URL = 'http://152.7.177.154:8000';
+
 function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [chats, setChats] = useState<Chat[]>([]);
@@ -32,7 +35,7 @@ function App() {
           console.log('Using existing session ID:', savedSessionId);
         } else {
           // Create new session
-          const response = await fetch('http://localhost:8000/session', {
+          const response = await fetch(`${API_BASE_URL}/session`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -205,7 +208,7 @@ function App() {
 
     // Call backend API
     try {
-      const response = await fetch('http://localhost:8000/chat', {
+      const response = await fetch(`${API_BASE_URL}/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -376,7 +379,7 @@ function App() {
     
     try {
       // Call backend API for welcome message
-      const response = await fetch('http://localhost:8000/chat', {
+      const response = await fetch(`${API_BASE_URL}/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -491,7 +494,7 @@ I'm here to help you learn and grow. Feel free to ask me anything!
     // Delete from database if conversation_id exists
     if (chatToDelete?.conversation_id) {
       try {
-        const response = await fetch(`http://localhost:8000/conversation/${chatToDelete.conversation_id}`, {
+        const response = await fetch(`${API_BASE_URL}/conversation/${chatToDelete.conversation_id}`, {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',
