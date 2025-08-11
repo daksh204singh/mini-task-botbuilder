@@ -8,8 +8,11 @@ interface ChatWindowProps {
 
 const ChatWindow: React.FC<ChatWindowProps> = ({ messages, isLoading }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [typingStartTime, setTypingStartTime] = useState<number | null>(null);
   const [currentTypingTime, setCurrentTypingTime] = useState<number>(0);
+  const [isScrolling,setIsScrolling]=useState(false);
+  const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -41,6 +44,18 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, isLoading }) => {
     };
   }, [typingStartTime]);
 
+  useEffect(()=>{
+    const el=containerRef.current;
+    if(!el) return;
+    const onScroll=()=>{
+      if(scrollTimeout.current) clearTimeout(scrollTimeout.current);
+      setIsScrolling(true);
+      scrollTimeout.current=setTimeout(()=>setIsScrolling(false),1000);
+    };
+    el.addEventListener('scroll',onScroll);
+    return ()=>{el.removeEventListener('scroll',onScroll); if(scrollTimeout.current) clearTimeout(scrollTimeout.current);} ;
+  },[]);
+
   const formatTypingTime = (time: number) => {
     if (time < 1000) {
       return `${time}ms`;
@@ -50,7 +65,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, isLoading }) => {
   };
 
   return (
-    <div className="chat-window">
+    <div ref={containerRef} className={`chat-window ${isScrolling ? 'scrolling' : ''}`}>
       <div className="messages-container">
         {messages.length === 0 ? (
           <div className="empty-state">
