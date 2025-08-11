@@ -278,15 +278,28 @@ I'm here to help you learn and grow. Feel free to ask me anything!
     setShowBotModal(true);
   };
 
+  const handleDeleteChat = (chatId: string) => {
+    setChats(prev => prev.filter(chat => chat.id !== chatId));
+    
+    // If we're deleting the active chat, clear the active state
+    if (activeChatId === chatId) {
+      setActiveChatId(null);
+      setCurrentBotConfig(undefined);
+    }
+  };
+
   return (
     <div className="App">
-      <Sidebar 
-        chats={chats}
-        activeChatId={activeChatId}
-        onNewChat={handleNewChat}
-        onSelectChat={handleSelectChat}
-        isOpen={sidebarOpen}
-      />
+      {chats.length > 0 && (
+        <Sidebar 
+          chats={chats}
+          activeChatId={activeChatId}
+          onNewChat={handleNewChat}
+          onSelectChat={handleSelectChat}
+          onDeleteChat={handleDeleteChat}
+          isOpen={sidebarOpen}
+        />
+      )}
       
       <div className="main-content" onClick={handleMainContentClick}>
         <Header onMenuToggle={handleMenuToggle} />

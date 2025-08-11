@@ -7,8 +7,8 @@ interface ChatWindowProps {
 }
 
 const ChatWindow: React.FC<ChatWindowProps> = ({ messages, isLoading }) => {
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const [typingStartTime, setTypingStartTime] = useState<number | null>(null);
   const [currentTypingTime, setCurrentTypingTime] = useState<number>(0);
   const [isScrolling,setIsScrolling]=useState(false);
@@ -19,6 +19,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, isLoading }) => {
   };
 
   useEffect(() => {
+    // Always scroll to bottom when messages change
     scrollToBottom();
   }, [messages]);
 
@@ -26,9 +27,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, isLoading }) => {
     if (isLoading) {
       setTypingStartTime(Date.now());
       setCurrentTypingTime(0);
+      // Scroll to bottom when loading starts
+      scrollToBottom();
     } else {
       setTypingStartTime(null);
       setCurrentTypingTime(0);
+      // Scroll to bottom when loading ends
+      scrollToBottom();
     }
   }, [isLoading]);
 

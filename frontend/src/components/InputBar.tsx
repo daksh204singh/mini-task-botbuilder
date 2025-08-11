@@ -70,6 +70,10 @@ const InputBar: React.FC<InputBarProps> = ({ onSendMessage, botConfig }) => {
                   <span className="bot-detail-label">Model:</span>
                   <span className="bot-detail-value">{botConfig.model}</span>
                 </div>
+                <div className="bot-detail">
+                  <span className="bot-detail-label">Persona:</span>
+                  <span className="bot-detail-value">{botConfig.persona}</span>
+                </div>
               </>
             ) : (
               <>

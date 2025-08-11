@@ -18,6 +18,7 @@ interface SidebarProps {
   activeChatId: string | null;
   onNewChat: () => void;
   onSelectChat: (chatId: string) => void;
+  onDeleteChat: (chatId: string) => void;
   isOpen?: boolean;
 }
 
@@ -26,6 +27,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   activeChatId, 
   onNewChat, 
   onSelectChat,
+  onDeleteChat,
   isOpen = true 
 }) => {
   const formatResponseTime = (time: number) => {
@@ -34,6 +36,11 @@ const Sidebar: React.FC<SidebarProps> = ({
     } else {
       return `${(time / 1000).toFixed(1)}s`;
     }
+  };
+
+  const handleDeleteClick = (e: React.MouseEvent, chatId: string) => {
+    e.stopPropagation(); // Prevent chat selection when clicking delete
+    onDeleteChat(chatId);
   };
 
   return (
@@ -83,6 +90,15 @@ const Sidebar: React.FC<SidebarProps> = ({
                   )}
                 </div>
               </div>
+              <button 
+                className="chat-delete-button"
+                onClick={(e) => handleDeleteClick(e, chat.id)}
+                title="Delete chat"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/>
+                </svg>
+              </button>
             </div>
           ))
         )}
