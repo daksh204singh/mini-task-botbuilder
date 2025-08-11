@@ -81,6 +81,34 @@ Return only the topics, one per line, no numbering or formatting.
             logger.error(f"Error analyzing conversation topics: {e}")
             return []
     
+    def get_simple_context(self, messages: List[ChatMessage], conversation_id: Optional[str] = None) -> str:
+        """Simple context retrieval using last 5 messages"""
+        if not messages or len(messages) < 2:
+            return ""
+        
+        try:
+            # Get the last 5 messages for context
+            recent_messages = messages[-5:] if len(messages) > 5 else messages
+            
+            # Format the recent conversation context
+            context_parts = []
+            context_parts.append("**Recent Conversation Context:**")
+            
+            for msg in recent_messages:
+                role = "User" if msg.role == 'user' else "Assistant"
+                # Truncate long messages for context
+                content = msg.content[:200] + "..." if len(msg.content) > 200 else msg.content
+                context_parts.append(f"• {role}: {content}")
+            
+            context = "\n".join(context_parts)
+            logger.info(f"Retrieved simple context with {len(recent_messages)} recent messages")
+            
+            return context
+            
+        except Exception as e:
+            logger.error(f"Error retrieving simple context: {e}")
+            return ""
+    
     def get_intelligent_context(self, query: str, messages: List[ChatMessage], conversation_id: Optional[str] = None) -> Tuple[str, Dict]:
         """Enhanced context retrieval with intelligent analysis"""
         if not self.vector_service:
@@ -177,11 +205,11 @@ Return only the topics, one per line, no numbering or formatting.
             return "", {"context_strategy": "error", "error": str(e)}
     
     def get_relevant_context(self, query: str, conversation_id: Optional[str] = None, k: int = 5) -> str:
-        """Legacy method - now uses intelligent context"""
-        return self.get_intelligent_context(query, [], conversation_id)[0]
+        """Legacy method - now uses simple context"""
+        return self.get_simple_context([], conversation_id)
     
     def generate_response(self, messages: List[ChatMessage], persona: Optional[Dict] = None, conversation_id: Optional[str] = None) -> Dict:
-        """Enhanced response generation with intelligent RAG integration"""
+        """Enhanced response generation with simple but effective context"""
         try:
             start_time = time.time()
             
@@ -191,13 +219,12 @@ Return only the topics, one per line, no numbering or formatting.
             # Get the latest user message
             latest_message = messages[-1].content if messages else ""
             
-            # Get intelligent context
-            context, context_info = self.get_intelligent_context(latest_message, messages, conversation_id)
+            # Get simple context using last 5 messages
+            context = self.get_simple_context(messages, conversation_id)
             
-            # Build enhanced prompt with intelligent context
+            # Build enhanced prompt with context
             if context:
                 context_prompt = f"""
-**Conversation Context:**
 {context}
 
 **Current Question:** {latest_message}
@@ -237,7 +264,7 @@ Please provide a helpful response:"""
                 "tokens_used": tokens_used,
                 "success": True,
                 "context_used": bool(context),
-                "context_info": context_info  # Include context analysis info
+                "context_info": {"strategy": "simple_context", "messages_used": len(messages[-5:]) if messages else 0}
             }
             
         except Exception as e:
@@ -249,7 +276,7 @@ Please provide a helpful response:"""
                 "success": False,
                 "error": str(e),
                 "context_used": False,
-                "context_info": {"context_strategy": "error", "error": str(e)}
+                "context_info": {"strategy": "error", "error": str(e)}
             }
     
     def validate_api_key(self) -> bool:
