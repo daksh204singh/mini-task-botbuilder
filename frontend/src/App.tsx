@@ -349,7 +349,7 @@ function App() {
     }
   };
 
-  const handleBotCreation = (botConfig: BotConfig) => {
+  const handleBotCreation = async (botConfig: BotConfig) => {
     setCurrentBotConfig(botConfig);
     setShowBotModal(false);
     
@@ -370,10 +370,80 @@ function App() {
     setChats(prev => [...prev, newChat]);
     setActiveChatId(newChat.id);
     
-    // Add welcome message
-    const welcomeMessage: Message = {
-      id: Date.now().toString(),
-      text: `# Welcome! I'm ${botConfig.name} 🤖
+    // Show loading state
+    setIsLoading(true);
+    
+    try {
+      // Call backend API for welcome message
+      const response = await fetch('http://localhost:8000/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [{
+            role: 'user',
+            content: 'Please introduce yourself as a new chatbot and welcome the user to start a conversation.',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }],
+          persona: {
+            bot_name: botConfig.name,
+            persona: botConfig.persona,
+            model: botConfig.model
+          }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // Create welcome message from API response
+      const welcomeMessage: Message = {
+        id: Date.now().toString(),
+        text: data.response,
+        isUser: false,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        responseTime: Math.round(data.response_time * 1000)
+      };
+      
+      // Create log entry for the welcome message
+      const welcomeLogEntry: LogEntry = {
+        id: Date.now().toString(),
+        date: new Date().toLocaleDateString(),
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        model: data.model,
+        prompt: "New chat started",
+        response: data.response
+      };
+
+      // Add welcome log entry
+      setLogs(prev => {
+        const newLogs = [welcomeLogEntry, ...prev.slice(0, 4)];
+        console.log('Added welcome log entry:', newLogs);
+        return newLogs;
+      });
+
+      // Update the new chat with the welcome message
+      setChats(prev => prev.map(chat => {
+        if (chat.id === newChat.id) {
+          return {
+            ...chat,
+            messages: [welcomeMessage]
+          };
+        }
+        return chat;
+      }));
+      
+    } catch (error) {
+      console.error('Error generating welcome message:', error);
+      
+      // Fallback welcome message
+      const fallbackMessage: Message = {
+        id: Date.now().toString(),
+        text: `# Welcome! I'm ${botConfig.name} 🤖
 
 ${botConfig.persona}
 
@@ -382,38 +452,41 @@ I'm here to help you learn and grow. Feel free to ask me anything!
 **Model**: ${botConfig.model}
 
 *What would you like to explore today?*`,
-      isUser: false,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      responseTime: 0
-    };
-    
-    // Create log entry for the welcome message
-    const welcomeLogEntry: LogEntry = {
-      id: Date.now().toString(),
-      date: new Date().toLocaleDateString(),
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      model: botConfig.model,
-      prompt: "New chat started",
-      response: welcomeMessage.text
-    };
+        isUser: false,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        responseTime: 0
+      };
 
-    // Add welcome log entry
-    setLogs(prev => {
-      const newLogs = [welcomeLogEntry, ...prev.slice(0, 4)];
-      console.log('Added welcome log entry:', newLogs);
-      return newLogs;
-    });
+      // Create fallback log entry
+      const fallbackLogEntry: LogEntry = {
+        id: Date.now().toString(),
+        date: new Date().toLocaleDateString(),
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        model: botConfig.model,
+        prompt: "New chat started",
+        response: fallbackMessage.text
+      };
 
-    // Update the new chat with the welcome message
-    setChats(prev => prev.map(chat => {
-      if (chat.id === newChat.id) {
-        return {
-          ...chat,
-          messages: [welcomeMessage]
-        };
-      }
-      return chat;
-    }));
+      // Add fallback log entry
+      setLogs(prev => {
+        const newLogs = [fallbackLogEntry, ...prev.slice(0, 4)];
+        console.log('Added fallback welcome log entry:', newLogs);
+        return newLogs;
+      });
+
+      // Update the new chat with the fallback welcome message
+      setChats(prev => prev.map(chat => {
+        if (chat.id === newChat.id) {
+          return {
+            ...chat,
+            messages: [fallbackMessage]
+          };
+        }
+        return chat;
+      }));
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleBeginClick = () => {
