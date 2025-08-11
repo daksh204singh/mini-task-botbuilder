@@ -1,17 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 interface InputBarProps {
-  onSendMessage: (message: string) => void;
-  isLoading: boolean;
+  onSendMessage: (messageText: string) => void;
 }
 
-const InputBar: React.FC<InputBarProps> = ({ onSendMessage, isLoading }) => {
+const InputBar: React.FC<InputBarProps> = ({ onSendMessage }) => {
   const [inputValue, setInputValue] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSendMessage = () => {
-    if (!inputValue.trim() || isLoading) return;
-    onSendMessage(inputValue.trim());
-    setInputValue('');
+    if (inputValue.trim()) {
+      onSendMessage(inputValue);
+      setInputValue('');
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -21,17 +25,32 @@ const InputBar: React.FC<InputBarProps> = ({ onSendMessage, isLoading }) => {
     }
   };
 
+  const adjustTextareaHeight = () => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 100)}px`;
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputValue(e.target.value);
+    adjustTextareaHeight();
+  };
+
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [inputValue]);
+
   return (
     <div className="input-bar">
       <div className="input-container">
         <textarea
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyPress={handleKeyPress}
-          placeholder="Ask your tutor anything..."
-          disabled={isLoading}
-          aria-label="Message input"
+          ref={textareaRef}
           className="message-input"
+          value={inputValue}
+          onChange={handleInputChange}
+          onKeyPress={handleKeyPress}
+          placeholder="Ask your tutor..."
           rows={1}
         />
         
@@ -43,18 +62,17 @@ const InputBar: React.FC<InputBarProps> = ({ onSendMessage, isLoading }) => {
             </div>
             <div className="bot-detail">
               <span className="bot-detail-label">Persona:</span>
-              <span className="bot-detail-value">Friendly Tutor</span>
+              <span className="bot-detail-value">Tutor</span>
             </div>
           </div>
           
-          <button
+          <button 
+            className="send-button" 
             onClick={handleSendMessage}
-            disabled={!inputValue.trim() || isLoading}
-            className="send-button"
-            aria-label="Send message"
+            disabled={!inputValue.trim()}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" fill="currentColor"/>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
             </svg>
           </button>
         </div>

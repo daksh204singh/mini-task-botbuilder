@@ -1,12 +1,5 @@
-import React, { useRef, useEffect } from 'react';
-import MessageBubble from './MessageBubble';
-
-interface Message {
-  id: string;
-  text: string;
-  isUser: boolean;
-  timestamp: Date;
-}
+import React, { useRef, useEffect, useState } from 'react';
+import MessageBubble, { Message } from './MessageBubble';
 
 interface ChatWindowProps {
   messages: Message[];
@@ -15,6 +8,8 @@ interface ChatWindowProps {
 
 const ChatWindow: React.FC<ChatWindowProps> = ({ messages, isLoading }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [typingStartTime, setTypingStartTime] = useState<number | null>(null);
+  const [currentTypingTime, setCurrentTypingTime] = useState<number>(0);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -22,48 +17,77 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, isLoading }) => {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isLoading]);
+  }, [messages]);
+
+  useEffect(() => {
+    if (isLoading) {
+      setTypingStartTime(Date.now());
+      setCurrentTypingTime(0);
+    } else {
+      setTypingStartTime(null);
+      setCurrentTypingTime(0);
+    }
+  }, [isLoading]);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (typingStartTime) {
+      interval = setInterval(() => {
+        setCurrentTypingTime(Date.now() - typingStartTime);
+      }, 100);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [typingStartTime]);
+
+  const formatTypingTime = (time: number) => {
+    if (time < 1000) {
+      return `${time}ms`;
+    } else {
+      return `${(time / 1000).toFixed(1)}s`;
+    }
+  };
 
   return (
     <div className="chat-window">
       <div className="messages-container">
-        {messages.length === 0 && (
+        {messages.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-icon">🎓</div>
-            <h3>Welcome to Your Classroom!</h3>
-            <p>Ask your tutor anything and start learning in a fun, interactive way.</p>
+            <div className="empty-icon">🤖</div>
+            <h3>Welcome to Minimal Futuristic Classroom</h3>
+            <p>Start a conversation with your AI tutor. Ask questions, get explanations, or explore any topic you'd like to learn about.</p>
           </div>
-        )}
-        
-        {messages.map((message) => (
-          <MessageBubble
-            key={message.id}
-            message={message.text}
-            isUser={message.isUser}
-            timestamp={message.timestamp}
-          />
-        ))}
-        
-        {isLoading && (
-          <div className="message-bubble bot-message">
-            <div className="bot-avatar">
-              <svg className="robot-icon-small" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="2" fill="none"/>
-                <circle cx="9" cy="9" r="1" fill="currentColor"/>
-                <circle cx="15" cy="9" r="1" fill="currentColor"/>
-                <path d="M9 15C9 13.8954 9.89543 13 11 13H13C14.1046 13 15 13.8954 15 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-              </svg>
-            </div>
-            <div className="message-content">
-              <div className="typing-indicator">
-                <span></span>
-                <span></span>
-                <span></span>
+        ) : (
+          <>
+            {messages.map((message) => (
+              <MessageBubble key={message.id} message={message} />
+            ))}
+            {isLoading && (
+              <div className="message-bubble bot-message">
+                <div className="bot-avatar">
+                  <img 
+                    src="/assets/colorizeAnimationTest3.gif" 
+                    alt="Bot Avatar" 
+                    className="robot-icon-small"
+                  />
+                </div>
+                <div className="message-content">
+                  <div className="typing-indicator">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                    {currentTypingTime > 0 && (
+                      <span className="typing-time">
+                        {formatTypingTime(currentTypingTime)}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+            )}
+          </>
         )}
-        
         <div ref={messagesEndRef} />
       </div>
     </div>
