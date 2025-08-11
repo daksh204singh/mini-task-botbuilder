@@ -72,7 +72,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, isLoading }) => {
   return (
     <div ref={containerRef} className={`chat-window ${isScrolling ? 'scrolling' : ''}`}>
       <div className="messages-container">
-        {messages.length === 0 ? (
+        {messages.length === 0 && !isLoading ? (
           <div className="empty-state">
             <div className="empty-icon">🤖</div>
             <h3>Welcome to TutorBot</h3>

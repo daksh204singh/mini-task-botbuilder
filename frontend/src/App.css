@@ -954,7 +954,7 @@ body {
   justify-content: center;
   padding: 20px;
   background: rgba(0, 0, 0, 0.4);
-  z-index: 1000;
+  z-index: 2000; /* Above logs panel */
   backdrop-filter: blur(8px);
 }
 
@@ -969,6 +969,7 @@ body {
   overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(15px);
+  z-index: 2001; /* Ensure panel content is above logs panel */
 }
 
 .modal-header {
