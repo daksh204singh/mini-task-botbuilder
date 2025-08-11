@@ -3,6 +3,7 @@ import logging
 import time
 from typing import List, Dict, Optional
 from pydantic import BaseModel
+from .vector_service import VectorService
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,14 @@ class GeminiService:
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
         self.chat_history = []
+        
+        # Initialize vector service for RAG
+        try:
+            self.vector_service = VectorService()
+            logger.info("Vector service initialized for RAG in Gemini service")
+        except Exception as e:
+            logger.error(f"Failed to initialize vector service for RAG: {e}")
+            self.vector_service = None
         
     def format_conversation(self, messages: List[ChatMessage], persona: Optional[str] = None) -> List[Dict]:
         """Format messages for Gemini API"""
@@ -39,30 +48,57 @@ class GeminiService:
             return f"You are a tutor named {bot_name}, acting as {persona_desc}. Help the user with their questions. Use markdown formatting for your output."
         return "You are a helpful AI assistant. Use markdown formatting for your output."
     
-    def generate_response(self, messages: List[ChatMessage], persona: Optional[Dict] = None) -> Dict:
-        """Generate response using Gemini API"""
+    def get_relevant_context(self, query: str, conversation_id: Optional[str] = None, k: int = 3) -> str:
+        """Retrieve relevant context from vector database using RAG"""
+        if not self.vector_service:
+            return ""
+        
+        try:
+            # Search for similar messages
+            similar_messages = self.vector_service.search_similar_messages(query, conversation_id, k)
+            
+            if not similar_messages:
+                return ""
+            
+            # Format context for the AI
+            context_parts = []
+            for msg in similar_messages:
+                role = "User" if msg['role'] == 'user' else "Assistant"
+                content = msg['content_preview']
+                context_parts.append(f"{role}: {content}")
+            
+            context = "\n".join(context_parts)
+            logger.info(f"Retrieved {len(similar_messages)} relevant context messages for query: {query[:50]}...")
+            return context
+            
+        except Exception as e:
+            logger.error(f"Error retrieving context: {e}")
+            return ""
+    
+    def generate_response(self, messages: List[ChatMessage], persona: Optional[Dict] = None, conversation_id: Optional[str] = None) -> Dict:
+        """Generate response using Gemini API with RAG context"""
         try:
             start_time = time.time()
             
             # Get system prompt
             system_prompt = self.get_system_prompt(persona)
             
-            # Format conversation
-            conversation = self.format_conversation(messages, persona)
+            # Get the latest user message
+            latest_message = messages[-1].content if messages else ""
             
-            # Start chat with history
-            if len(conversation) > 1:
-                # Create chat with system prompt
-                chat = self.model.start_chat(history=conversation[:-1])
-                
-                # Send the latest message
-                latest_message = conversation[-1]["parts"][0]
-                response = chat.send_message(latest_message)
+            # Retrieve relevant context using RAG
+            context = self.get_relevant_context(latest_message, conversation_id, k=3)
+            
+            # Build the prompt with context
+            if context:
+                context_prompt = f"\n\nRelevant conversation context:\n{context}\n\nCurrent question: {latest_message}\n\nPlease use the context above to provide a relevant and contextual response."
+                full_prompt = f"{system_prompt}\n\n{context_prompt}\n\nAssistant:"
             else:
-                # Single message, combine system prompt with user message
-                user_message = conversation[0]["parts"][0]
-                full_prompt = f"{system_prompt}\n\nUser: {user_message}\n\nAssistant:"
-                response = self.model.generate_content(full_prompt)
+                # No context found, use direct approach
+                full_prompt = f"{system_prompt}\n\nUser: {latest_message}\n\nAssistant:"
+            
+            # Generate response
+            response = self.model.generate_content(full_prompt)
             
             response_time = time.time() - start_time
             

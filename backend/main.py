@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 from dotenv import load_dotenv
 from services.gemini_service import GeminiService, ChatMessage
+from services.database_service import DatabaseService
 import os
 import logging
 
@@ -26,6 +27,14 @@ try:
     logger.info("Gemini service initialized successfully")
 except Exception as e:
     logger.error(f"Failed to initialize Gemini service: {e}")
+    raise
+
+# Initialize Database Service
+try:
+    database_service = DatabaseService()
+    logger.info("Database service initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize database service: {e}")
     raise
 
 app = FastAPI(title="TutorBot API", version="1.0.0")
@@ -54,12 +63,16 @@ class ChatRequest(BaseModel):
     messages: List[Message]
     persona: Persona
     temperature: Optional[float] = 0.7
+    session_id: Optional[str] = None
+    conversation_id: Optional[str] = None
 
 class ChatResponse(BaseModel):
     response: str
     model: str
     response_time: float
     tokens_used: Optional[int] = None
+    conversation_id: str
+    session_id: str
 
 @app.get("/")
 async def root():
@@ -72,26 +85,64 @@ async def health_check():
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     try:
-        # Convert request messages to ChatMessage format
+        # Handle session and conversation management
+        session_id = database_service.get_or_create_session_id(request.session_id)
+        
+        # If no conversation_id provided, create a new conversation
+        if not request.conversation_id:
+            conversation_id = database_service.create_conversation(
+                session_id=session_id,
+                bot_name=request.persona.bot_name,
+                persona=request.persona.persona,
+                model=request.persona.model
+            )
+        else:
+            conversation_id = request.conversation_id
+            # Verify conversation exists and belongs to session
+            conversation = database_service.get_conversation(conversation_id)
+            if not conversation or conversation["session_id"] != session_id:
+                raise HTTPException(status_code=404, detail="Conversation not found")
+        
+        # Store the latest user message in database
+        if request.messages:
+            latest_message = request.messages[-1]
+            database_service.add_message(
+                conversation_id=conversation_id,
+                role=latest_message.role,
+                content=latest_message.content
+            )
+        
+        # Convert request messages to ChatMessage format for Gemini
         chat_messages = [
             ChatMessage(role=msg.role, content=msg.content, timestamp=msg.timestamp)
             for msg in request.messages
         ]
         
-        # Generate response using Gemini service
+        # Generate response using Gemini service with RAG
         result = gemini_service.generate_response(
             messages=chat_messages,
-            persona=request.persona.dict()
+            persona=request.persona.dict(),
+            conversation_id=conversation_id
         )
         
         if not result["success"]:
             raise HTTPException(status_code=500, detail=result.get("error", "Unknown error"))
         
+        # Store the assistant response in database
+        database_service.add_message(
+            conversation_id=conversation_id,
+            role="assistant",
+            content=result["response"],
+            tokens_used=result.get("tokens_used", 0)
+        )
+        
         return ChatResponse(
             response=result["response"],
             model=request.persona.model,
             response_time=result["response_time"],
-            tokens_used=result["tokens_used"]
+            tokens_used=result["tokens_used"],
+            conversation_id=conversation_id,
+            session_id=session_id
         )
         
     except HTTPException:
@@ -117,3 +168,93 @@ async def get_models():
             }
         ]
     }
+
+@app.post("/session")
+async def create_session():
+    """Create a new session and return session ID"""
+    try:
+        session_id = database_service.get_or_create_session_id()
+        return {"session_id": session_id}
+    except Exception as e:
+        logger.error(f"Error creating session: {e}")
+        raise HTTPException(status_code=500, detail=f"Error creating session: {str(e)}")
+
+@app.get("/session/{session_id}/conversations")
+async def get_session_conversations(session_id: str):
+    """Get all conversations for a session"""
+    try:
+        conversations = database_service.get_session_conversations(session_id)
+        return {"conversations": conversations}
+    except Exception as e:
+        logger.error(f"Error getting session conversations: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting conversations: {str(e)}")
+
+@app.get("/conversation/{conversation_id}")
+async def get_conversation(conversation_id: str):
+    """Get conversation details and messages"""
+    try:
+        conversation = database_service.get_conversation(conversation_id)
+        if not conversation:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        
+        messages = database_service.get_conversation_messages(conversation_id)
+        return {
+            "conversation": conversation,
+            "messages": messages
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting conversation: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting conversation: {str(e)}")
+
+@app.delete("/conversation/{conversation_id}")
+async def delete_conversation(conversation_id: str):
+    """Delete a conversation and all its messages"""
+    try:
+        success = database_service.delete_conversation(conversation_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        return {"message": "Conversation deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting conversation: {e}")
+        raise HTTPException(status_code=500, detail=f"Error deleting conversation: {str(e)}")
+
+@app.get("/search")
+async def search_messages(query: str, conversation_id: Optional[str] = None, k: int = 5):
+    """Search for similar messages using vector database"""
+    try:
+        results = database_service.search_similar_messages(query, conversation_id, k)
+        return {"results": results, "query": query, "count": len(results)}
+    except Exception as e:
+        logger.error(f"Error searching messages: {e}")
+        raise HTTPException(status_code=500, detail=f"Error searching messages: {str(e)}")
+
+@app.get("/conversation/{conversation_id}/context")
+async def get_conversation_context(conversation_id: str, query: str, k: int = 3):
+    """Get relevant context from a specific conversation for a query"""
+    try:
+        # Verify conversation exists
+        conversation = database_service.get_conversation(conversation_id)
+        if not conversation:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        
+        context = database_service.get_conversation_context(conversation_id, query, k)
+        return {"context": context, "query": query, "conversation_id": conversation_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting conversation context: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting context: {str(e)}")
+
+@app.get("/vector-stats")
+async def get_vector_stats():
+    """Get statistics about the vector database"""
+    try:
+        stats = database_service.get_vector_stats()
+        return stats
+    except Exception as e:
+        logger.error(f"Error getting vector stats: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting vector stats: {str(e)}")

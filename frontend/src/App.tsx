@@ -18,52 +18,84 @@ function App() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [showLogsPanel, setShowLogsPanel] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [sessionId, setSessionId] = useState<string | null>(null);
 
-  // Load data from localStorage on component mount
+  // Initialize session and load data from localStorage on component mount
   useEffect(() => {
-    try {
-      console.log('Loading data from localStorage...');
-      const savedChats = localStorage.getItem('mini-task-chats');
-      const savedActiveChatId = localStorage.getItem('mini-task-activeChatId');
-      const savedCurrentBotConfig = localStorage.getItem('mini-task-currentBotConfig');
-      const savedSidebarOpen = localStorage.getItem('mini-task-sidebarOpen');
-      const savedLogs = localStorage.getItem('mini-task-logs');
-
-      console.log('Saved chats:', savedChats);
-      console.log('Saved active chat ID:', savedActiveChatId);
-
-      if (savedChats) {
-        const parsedChats = JSON.parse(savedChats);
-        console.log('Parsed chats:', parsedChats);
-        if (Array.isArray(parsedChats) && parsedChats.length > 0) {
-          setChats(parsedChats);
+    const initializeApp = async () => {
+      try {
+        console.log('Initializing app...');
+        
+        // Create or retrieve session ID
+        const savedSessionId = localStorage.getItem('mini-task-sessionId');
+        if (savedSessionId) {
+          setSessionId(savedSessionId);
+          console.log('Using existing session ID:', savedSessionId);
+        } else {
+          // Create new session
+          const response = await fetch('http://localhost:8000/session', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            }
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            const newSessionId = data.session_id;
+            setSessionId(newSessionId);
+            localStorage.setItem('mini-task-sessionId', newSessionId);
+            console.log('Created new session ID:', newSessionId);
+          } else {
+            console.error('Failed to create session');
+          }
         }
-      }
-      
-      if (savedActiveChatId) {
-        setActiveChatId(savedActiveChatId);
-      }
-      
-      if (savedCurrentBotConfig) {
-        setCurrentBotConfig(JSON.parse(savedCurrentBotConfig));
-      }
-      
-      if (savedSidebarOpen !== null) {
-        setSidebarOpen(JSON.parse(savedSidebarOpen));
-      }
-      
-      if (savedLogs) {
-        const parsedLogs = JSON.parse(savedLogs);
-        if (Array.isArray(parsedLogs)) {
-          setLogs(parsedLogs);
+        
+        // Load other data from localStorage
+        const savedChats = localStorage.getItem('mini-task-chats');
+        const savedActiveChatId = localStorage.getItem('mini-task-activeChatId');
+        const savedCurrentBotConfig = localStorage.getItem('mini-task-currentBotConfig');
+        const savedSidebarOpen = localStorage.getItem('mini-task-sidebarOpen');
+        const savedLogs = localStorage.getItem('mini-task-logs');
+
+        console.log('Saved chats:', savedChats);
+        console.log('Saved active chat ID:', savedActiveChatId);
+
+        if (savedChats) {
+          const parsedChats = JSON.parse(savedChats);
+          console.log('Parsed chats:', parsedChats);
+          if (Array.isArray(parsedChats) && parsedChats.length > 0) {
+            setChats(parsedChats);
+          }
         }
+        
+        if (savedActiveChatId) {
+          setActiveChatId(savedActiveChatId);
+        }
+        
+        if (savedCurrentBotConfig) {
+          setCurrentBotConfig(JSON.parse(savedCurrentBotConfig));
+        }
+        
+        if (savedSidebarOpen !== null) {
+          setSidebarOpen(JSON.parse(savedSidebarOpen));
+        }
+        
+        if (savedLogs) {
+          const parsedLogs = JSON.parse(savedLogs);
+          if (Array.isArray(parsedLogs)) {
+            setLogs(parsedLogs);
+          }
+        }
+        
+        setIsInitialized(true);
+      } catch (error) {
+        console.error('Error initializing app:', error);
+        setIsInitialized(true);
       }
-      
-      setIsInitialized(true);
-    } catch (error) {
-      console.error('Error loading from localStorage:', error);
-      setIsInitialized(true);
-    }
+    };
+    
+    initializeApp();
   }, []);
 
   // Save chats to localStorage whenever chats change (but only after initialization)
@@ -130,35 +162,7 @@ function App() {
     }
   }, [logs, isInitialized]);
 
-  // Calculate storage usage
-  const getStorageUsage = () => {
-    try {
-      let totalSize = 0;
-      const keys = ['mini-task-chats', 'mini-task-activeChatId', 'mini-task-currentBotConfig', 'mini-task-sidebarOpen', 'mini-task-logs'];
-      
-      keys.forEach(key => {
-        const item = localStorage.getItem(key);
-        if (item) {
-          totalSize += item.length;
-        }
-      });
-      
-      // Convert to MB (1 character = 2 bytes in UTF-16)
-      const sizeInMB = (totalSize * 2) / (1024 * 1024);
-      const maxSizeInMB = 5; // Conservative estimate of 5MB limit
-      const percentage = (sizeInMB / maxSizeInMB) * 100;
-      
-      return {
-        used: sizeInMB,
-        max: maxSizeInMB,
-        percentage: Math.min(percentage, 100),
-        totalSize
-      };
-    } catch (error) {
-      console.error('Error calculating storage usage:', error);
-      return { used: 0, max: 5, percentage: 0, totalSize: 0 };
-    }
-  };
+
 
   // Get current active chat's messages
   const activeChat = chats.find(chat => chat.id === activeChatId);
@@ -208,13 +212,8 @@ function App() {
 
     setIsLoading(true);
 
-    // Prepare messages for API call
+    // Prepare messages for API call - RAG system only needs the latest message
     const messagesForAPI = [
-      ...messages.map(msg => ({
-        role: msg.isUser ? 'user' : 'assistant',
-        content: msg.text,
-        timestamp: msg.timestamp
-      })),
       {
         role: 'user',
         content: messageText,
@@ -235,7 +234,9 @@ function App() {
             bot_name: currentBotConfig?.name || 'Assistant',
             persona: currentBotConfig?.persona || 'a helpful assistant',
             model: currentBotConfig?.model || 'gemini-2.0-flash-exp'
-          }
+          },
+          session_id: sessionId,
+          conversation_id: activeChat?.conversation_id
         })
       });
 
@@ -252,6 +253,17 @@ function App() {
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         responseTime: Math.round(data.response_time * 1000)
       };
+
+      // Update chat with conversation_id from response
+      setChats(prev => prev.map(chat => {
+        if (chat.id === activeChatId) {
+          return {
+            ...chat,
+            conversation_id: data.conversation_id
+          };
+        }
+        return chat;
+      }));
 
       // Create log entry for this interaction
       const logEntry: LogEntry = {
@@ -380,17 +392,18 @@ function App() {
         headers: {
           'Content-Type': 'application/json',
         },
-                  body: JSON.stringify({
-            messages: [{
-              role: 'user',
-              content: 'Please introduce yourself as a new tutor and welcome the user to start a conversation.',
-              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            }],
+        body: JSON.stringify({
+          messages: [{
+            role: 'user',
+            content: 'Please introduce yourself as a new tutor and welcome the user to start a conversation.',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }],
           persona: {
             bot_name: botConfig.name,
             persona: botConfig.persona,
             model: botConfig.model
-          }
+          },
+          session_id: sessionId
         })
       });
 
@@ -426,12 +439,13 @@ function App() {
         return newLogs;
       });
 
-      // Update the new chat with the welcome message
+      // Update the new chat with the welcome message and conversation_id
       setChats(prev => prev.map(chat => {
         if (chat.id === newChat.id) {
           return {
             ...chat,
-            messages: [welcomeMessage]
+            messages: [welcomeMessage],
+            conversation_id: data.conversation_id
           };
         }
         return chat;
@@ -493,7 +507,29 @@ I'm here to help you learn and grow. Feel free to ask me anything!
     setShowBotModal(true);
   };
 
-  const handleDeleteChat = (chatId: string) => {
+  const handleDeleteChat = async (chatId: string) => {
+    // Find the chat to get its conversation_id
+    const chatToDelete = chats.find(chat => chat.id === chatId);
+    
+    // Delete from database if conversation_id exists
+    if (chatToDelete?.conversation_id) {
+      try {
+        const response = await fetch(`http://localhost:8000/conversation/${chatToDelete.conversation_id}`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+        
+        if (!response.ok) {
+          console.error('Failed to delete conversation from database');
+        }
+      } catch (error) {
+        console.error('Error deleting conversation from database:', error);
+      }
+    }
+    
+    // Remove from local state
     setChats(prev => prev.filter(chat => chat.id !== chatId));
     
     // If we're deleting the active chat, clear the active state
@@ -540,7 +576,6 @@ I'm here to help you learn and grow. Feel free to ask me anything!
           onSelectChat={handleSelectChat}
           onDeleteChat={handleDeleteChat}
           onClearAllData={clearAllData}
-          storageUsage={getStorageUsage()}
           isOpen={sidebarOpen}
         />
       )}

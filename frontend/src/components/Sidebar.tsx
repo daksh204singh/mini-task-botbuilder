@@ -11,6 +11,7 @@ export interface Chat {
   averageResponseTime?: number;
   messageCount?: number;
   botConfig?: BotConfig;
+  conversation_id?: string; // Database conversation ID
 }
 
 interface SidebarProps {
@@ -20,7 +21,6 @@ interface SidebarProps {
   onSelectChat: (chatId: string) => void;
   onDeleteChat: (chatId: string) => void;
   onClearAllData: () => void;
-  storageUsage: { used: number; max: number; percentage: number; totalSize: number };
   isOpen?: boolean;
 }
 
@@ -31,7 +31,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   onSelectChat,
   onDeleteChat,
   onClearAllData,
-  storageUsage,
   isOpen = true 
 }) => {
   const formatResponseTime = (time: number) => {
@@ -53,11 +52,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  const getStorageColor = (percentage: number) => {
-    if (percentage < 50) return '#10b981'; // green
-    if (percentage < 80) return '#f59e0b'; // yellow
-    return '#ef4444'; // red
-  };
+
 
   return (
     <div className={`sidebar ${isOpen ? 'open' : ''}`}>
@@ -76,27 +71,6 @@ const Sidebar: React.FC<SidebarProps> = ({
             Clear All
           </button>
         )}
-      </div>
-      
-      {/* Storage Usage Bar */}
-      <div className="storage-usage-container">
-        <div className="storage-usage-header">
-          <span className="storage-label">Storage</span>
-          <span className="storage-size">{storageUsage.used.toFixed(2)}MB / {storageUsage.max}MB</span>
-        </div>
-        <div className="storage-progress-bar">
-          <div 
-            className="storage-progress-fill"
-            style={{ 
-              width: `${storageUsage.percentage}%`,
-              backgroundColor: getStorageColor(storageUsage.percentage)
-            }}
-          />
-        </div>
-        <div className="storage-stats">
-          <span className="storage-percentage">{storageUsage.percentage.toFixed(1)}% used</span>
-          <span className="storage-messages">{chats.reduce((total, chat) => total + chat.messages.length, 0)} messages</span>
-        </div>
       </div>
       
       <div className="chat-list">

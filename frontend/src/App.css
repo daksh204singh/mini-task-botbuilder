@@ -108,61 +108,7 @@ body {
   margin-right: 8px;
 }
 
-/* Storage Usage Bar */
-.storage-usage-container {
-  padding: 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  margin-bottom: 8px;
-}
 
-.storage-usage-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.storage-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: #a0aec0;
-}
-
-.storage-size {
-  font-size: 11px;
-  color: #718096;
-}
-
-.storage-progress-bar {
-  width: 100%;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
-  overflow: hidden;
-  margin-bottom: 8px;
-}
-
-.storage-progress-fill {
-  height: 100%;
-  border-radius: 3px;
-  transition: all 0.3s ease;
-}
-
-.storage-stats {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 11px;
-  color: #718096;
-}
-
-.storage-percentage {
-  font-weight: 500;
-}
-
-.storage-messages {
-  opacity: 0.8;
-}
 
 .chat-list {
   flex: 1;
