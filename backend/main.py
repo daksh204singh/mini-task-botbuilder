@@ -53,7 +53,8 @@ class Persona(BaseModel):
 class ChatRequest(BaseModel):
     messages: List[Message]
     persona: Persona
-    temperature: Optional[float] = 0.7
+    temperature: Optional[float] = 0.3
+    top_p: Optional[float] = 0.9
 
 class ChatResponse(BaseModel):
     response: str
@@ -78,10 +79,12 @@ async def chat(request: ChatRequest):
             for msg in request.messages
         ]
         
-        # Generate response using Gemini service
+        # Generate response using Gemini service with generation parameters
         result = gemini_service.generate_response(
             messages=chat_messages,
-            persona=request.persona.dict()
+            persona=request.persona.dict(),
+            temperature=request.temperature,
+            top_p=request.top_p
         )
         
         if not result["success"]:

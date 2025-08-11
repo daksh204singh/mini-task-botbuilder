@@ -39,7 +39,7 @@ class GeminiService:
             return f"You are a tutor named {bot_name}, acting as {persona_desc}. Help the user with their questions. Use markdown formatting for your output."
         return "You are a helpful AI assistant. Use markdown formatting for your output."
     
-    def generate_response(self, messages: List[ChatMessage], persona: Optional[Dict] = None) -> Dict:
+    def generate_response(self, messages: List[ChatMessage], persona: Optional[Dict] = None, temperature: float = 0.3, top_p: float = 0.9) -> Dict:
         """Generate response using Gemini API"""
         try:
             start_time = time.time()
@@ -50,10 +50,16 @@ class GeminiService:
             # Format conversation
             conversation = self.format_conversation(messages, persona)
             
+            # Configure generation parameters
+            generation_config = genai.types.GenerationConfig(
+                temperature=temperature,
+                top_p=top_p
+            )
+            
             # Start chat with history
             if len(conversation) > 1:
-                # Create chat with system prompt
-                chat = self.model.start_chat(history=conversation[:-1])
+                # Create chat with system prompt and generation config
+                chat = self.model.start_chat(history=conversation[:-1], generation_config=generation_config)
                 
                 # Send the latest message
                 latest_message = conversation[-1]["parts"][0]
@@ -62,7 +68,7 @@ class GeminiService:
                 # Single message, combine system prompt with user message
                 user_message = conversation[0]["parts"][0]
                 full_prompt = f"{system_prompt}\n\nUser: {user_message}\n\nAssistant:"
-                response = self.model.generate_content(full_prompt)
+                response = self.model.generate_content(full_prompt, generation_config=generation_config)
             
             response_time = time.time() - start_time
             
