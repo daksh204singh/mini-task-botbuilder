@@ -14,8 +14,10 @@ const getApiBaseUrl = (): string => {
   
   // Check if we're running on GitHub Pages (HTTPS)
   if (window.location.hostname === 'daksh204singh.github.io' || window.location.protocol === 'https:') {
-    console.log('✅ Using GitHub Pages config: https://152.7.177.154:8443');
-    return 'https://152.7.177.154:8443';
+    console.log('✅ Using GitHub Pages config with HTTP (will show warning)');
+    // For now, use HTTP directly - browser will show a warning but allow it
+    // This is a temporary solution until we get a proper domain with SSL
+    return 'http://152.7.177.154:8000';
   }
   
   // Check if we're running locally but want to use production backend
