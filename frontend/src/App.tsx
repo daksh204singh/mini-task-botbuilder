@@ -7,9 +7,7 @@ import Sidebar, { Chat } from './components/Sidebar';
 import BotCreationModal, { BotConfig } from './components/BotCreationModal';
 import { Message } from './components/MessageBubble';
 import LogsPanel, { LogEntry } from './components/LogsPanel';
-
-// API base URL - points to the deployed backend server
-const API_BASE_URL = 'http://152.7.177.154:8000';
+import { API_BASE_URL } from './config';
 
 function App() {
   const [isLoading, setIsLoading] = useState(false);

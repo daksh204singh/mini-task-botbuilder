@@ -21,7 +21,11 @@
   },
   "scripts": {
     "start": "react-scripts start",
+    "dev": "REACT_APP_USE_PROD_BACKEND=false react-scripts start",
+    "dev:prod": "REACT_APP_USE_PROD_BACKEND=true react-scripts start",
     "build": "react-scripts build",
+    "build:dev": "REACT_APP_USE_PROD_BACKEND=false react-scripts build",
+    "build:prod": "REACT_APP_USE_PROD_BACKEND=true react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
