@@ -5,6 +5,7 @@ from typing import List, Optional
 from dotenv import load_dotenv
 from services.gemini_service import GeminiService, ChatMessage
 from services.database_service import DatabaseService
+from services.rag_service import RAGService
 import os
 import logging
 
@@ -35,6 +36,14 @@ try:
     logger.info("Database service initialized successfully")
 except Exception as e:
     logger.error(f"Failed to initialize database service: {e}")
+    raise
+
+# Initialize RAG Service
+try:
+    rag_service = RAGService()
+    logger.info("RAG service initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize RAG service: {e}")
     raise
 
 app = FastAPI(title="TutorBot API", version="1.0.0")
@@ -260,7 +269,7 @@ async def get_conversation_context(conversation_id: str, query: str, k: int = 3)
 async def get_vector_stats():
     """Get statistics about the vector database"""
     try:
-        stats = database_service.get_vector_stats()
+        stats = rag_service.get_vector_stats()
         return stats
     except Exception as e:
         logger.error(f"Error getting vector stats: {e}")
@@ -270,7 +279,7 @@ async def get_vector_stats():
 async def get_rag_analytics():
     """Get analytics about RAG search performance"""
     try:
-        analytics = database_service.get_search_analytics()
+        analytics = rag_service.get_search_analytics()
         return analytics
     except Exception as e:
         logger.error(f"Error getting RAG analytics: {e}")
@@ -330,15 +339,29 @@ async def get_enhanced_context(
         if not conversation:
             raise HTTPException(status_code=404, detail="Conversation not found")
         
-        context = database_service.get_enhanced_conversation_context(conversation_id, query, k, min_score)
+        context = rag_service.generate_context(query, conversation_id)
         return {
             "context": context, 
             "query": query, 
-            "conversation_id": conversation_id,
-            "min_score_used": min_score or 0.3
+            "conversation_id": conversation_id
         }
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error getting enhanced context: {e}")
         raise HTTPException(status_code=500, detail=f"Error getting enhanced context: {str(e)}")
+
+@app.get("/rag/insights/{conversation_id}")
+async def get_conversation_insights(conversation_id: str):
+    """Get comprehensive conversation insights"""
+    try:
+        insights = rag_service.get_conversation_insights(conversation_id)
+        return insights
+    except Exception as e:
+        logger.error(f"Error getting conversation insights: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting conversation insights: {str(e)}")
+
+if __name__ == "__main__":
+    import uvicorn
+    logger.info("Starting TutorBot API server...")
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)

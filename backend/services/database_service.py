@@ -67,6 +67,18 @@ class DatabaseService:
                     )
                 """)
                 
+                # Create conversation_summaries table for persistent context
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS conversation_summaries (
+                        conversation_id TEXT PRIMARY KEY,
+                        topics TEXT,
+                        key_questions TEXT,
+                        learning_progress TEXT,
+                        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (conversation_id) REFERENCES conversations (id)
+                    )
+                """)
+                
                 conn.commit()
                 logger.info("Database initialized successfully")
                 
@@ -212,6 +224,33 @@ class DatabaseService:
             logger.error(f"Failed to get session conversations: {e}")
             raise
     
+    def get_all_conversations(self) -> List[Dict]:
+        """Get all conversations from the database"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT id, bot_name, persona, model, created_at, updated_at
+                    FROM conversations 
+                    ORDER BY updated_at DESC
+                """)
+                
+                conversations = []
+                for row in cursor.fetchall():
+                    conversations.append({
+                        "id": row[0],
+                        "bot_name": row[1],
+                        "persona": row[2],
+                        "model": row[3],
+                        "created_at": row[4],
+                        "updated_at": row[5]
+                    })
+                
+                return conversations
+        except Exception as e:
+            logger.error(f"Failed to get all conversations: {e}")
+            raise
+    
     def delete_conversation(self, conversation_id: str) -> bool:
         """Delete a conversation and all its messages"""
         try:
@@ -292,3 +331,100 @@ class DatabaseService:
         if not self.vector_service:
             return []
         return self.vector_service.search_similar_messages(query, conversation_id, k, min_score)
+    
+    def update_conversation_summary(self, conversation_id: str, topics: List[str], key_questions: List[str], learning_progress: str) -> bool:
+        """Update or create conversation summary"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Convert lists to JSON strings
+                topics_json = json.dumps(topics)
+                questions_json = json.dumps(key_questions)
+                
+                cursor.execute("""
+                    INSERT OR REPLACE INTO conversation_summaries 
+                    (conversation_id, topics, key_questions, learning_progress, last_updated)
+                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """, (conversation_id, topics_json, questions_json, learning_progress))
+                
+                conn.commit()
+                logger.info(f"Updated conversation summary for {conversation_id}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Failed to update conversation summary: {e}")
+            return False
+    
+    def get_conversation_summary(self, conversation_id: str) -> Optional[Dict]:
+        """Get conversation summary"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT topics, key_questions, learning_progress, last_updated
+                    FROM conversation_summaries
+                    WHERE conversation_id = ?
+                """, (conversation_id,))
+                
+                row = cursor.fetchone()
+                if row:
+                    return {
+                        "topics": json.loads(row[0]) if row[0] else [],
+                        "key_questions": json.loads(row[1]) if row[1] else [],
+                        "learning_progress": row[2],
+                        "last_updated": row[3]
+                    }
+                return None
+                
+        except Exception as e:
+            logger.error(f"Failed to get conversation summary: {e}")
+            return None
+    
+    def get_conversation_insights(self, conversation_id: str) -> Dict:
+        """Get comprehensive conversation insights including summary and statistics"""
+        try:
+            # Get basic conversation info
+            conversation = self.get_conversation(conversation_id)
+            if not conversation:
+                return {"error": "Conversation not found"}
+            
+            # Get messages
+            messages = self.get_conversation_messages(conversation_id)
+            
+            # Get summary
+            summary = self.get_conversation_summary(conversation_id)
+            
+            # Calculate statistics
+            user_messages = [msg for msg in messages if msg['role'] == 'user']
+            assistant_messages = [msg for msg in messages if msg['role'] == 'assistant']
+            
+            insights = {
+                "conversation": conversation,
+                "total_messages": len(messages),
+                "user_messages": len(user_messages),
+                "assistant_messages": len(assistant_messages),
+                "summary": summary,
+                "recent_questions": [msg['content'] for msg in user_messages[-3:]],
+                "conversation_duration": None
+            }
+            
+            # Calculate conversation duration if we have timestamps
+            if messages:
+                first_msg = messages[0]
+                last_msg = messages[-1]
+                if 'timestamp' in first_msg and 'timestamp' in last_msg:
+                    try:
+                        from datetime import datetime
+                        start_time = datetime.fromisoformat(first_msg['timestamp'].replace('Z', '+00:00'))
+                        end_time = datetime.fromisoformat(last_msg['timestamp'].replace('Z', '+00:00'))
+                        duration = end_time - start_time
+                        insights["conversation_duration"] = str(duration)
+                    except:
+                        pass
+            
+            return insights
+            
+        except Exception as e:
+            logger.error(f"Failed to get conversation insights: {e}")
+            return {"error": str(e)}

@@ -2,8 +2,8 @@ fastapi
 uvicorn
 google-generativeai
 python-dotenv
+pydantic
 faiss-cpu
 sentence-transformers
 numpy
-flask
-requests
+tiktoken
