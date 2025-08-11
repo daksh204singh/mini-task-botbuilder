@@ -164,7 +164,7 @@ function App() {
   const activeChat = chats.find(chat => chat.id === activeChatId);
   const messages = activeChat?.messages || [];
 
-  const handleSendMessage = (messageText: string) => {
+  const handleSendMessage = async (messageText: string) => {
     if (!messageText.trim()) return;
 
     // If no active chat exists, create a temporary one
@@ -208,112 +208,49 @@ function App() {
 
     setIsLoading(true);
 
-    // Track response start time
-    const responseStartTime = Date.now();
+    // Prepare messages for API call
+    const messagesForAPI = [
+      ...messages.map(msg => ({
+        role: msg.isUser ? 'user' : 'assistant',
+        content: msg.text,
+        timestamp: msg.timestamp
+      })),
+      {
+        role: 'user',
+        content: messageText,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }
+    ];
 
-    // Simulate bot response with markdown
-    setTimeout(() => {
-      const botResponses = [
-        {
-          text: `# Welcome to the Classroom! 👋
-
-I'm your AI tutor, ready to help you learn. Here are some things I can help you with:
-
-## 📚 Subjects I can teach:
-- **Mathematics**: Algebra, Calculus, Geometry
-- **Science**: Physics, Chemistry, Biology
-- **Programming**: Python, JavaScript, React
-- **Languages**: English, Spanish, French
-- **History**: World History, Art History
-
-## 💡 How to get started:
-1. Ask me any question
-2. Request explanations of concepts
-3. Get help with homework problems
-4. Practice with interactive examples
-
-*What would you like to learn today?*`,
-          delay: 1200
+    // Call backend API
+    try {
+      const response = await fetch('http://localhost:8000/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-        {
-          text: `## Great question! 🤔
+        body: JSON.stringify({
+          messages: messagesForAPI,
+          persona: {
+            bot_name: currentBotConfig?.name || 'Assistant',
+            persona: currentBotConfig?.persona || 'a helpful assistant',
+            model: currentBotConfig?.model || 'gemini-2.0-flash-exp'
+          }
+        })
+      });
 
-Let me break this down for you:
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
-### Key Points:
-- **Point 1**: This is important to understand
-- **Point 2**: Another crucial concept
-- **Point 3**: Don't forget this detail
-
-### Example:
-\`\`\`python
-def example_function():
-    return "This is how it works"
-\`\`\`
-
-> **Pro tip**: Always remember to practice what you learn!
-
-Would you like me to explain anything specific about this topic?`,
-          delay: 1800
-        },
-        {
-          text: `### Here's what you need to know:
-
-**Step 1**: Start with the basics
-**Step 2**: Build on your foundation  
-**Step 3**: Practice regularly
-
-| Concept | Description | Difficulty |
-|---------|-------------|------------|
-| Basic | Foundation concepts | Easy |
-| Intermediate | Building blocks | Medium |
-| Advanced | Complex applications | Hard |
-
-\`\`\`javascript
-// Example code
-function learn() {
-    console.log("Learning is fun!");
-}
-\`\`\`
-
-*Keep practicing and you'll master this in no time!*`,
-          delay: 2200
-        },
-        {
-          text: `# Let's explore this together! 🚀
-
-## What we'll cover:
-1. **Introduction** - Getting started
-2. **Core Concepts** - Understanding the basics
-3. **Practical Examples** - Real-world applications
-4. **Practice Problems** - Test your knowledge
-
-### Quick Start:
-\`\`\`html
-<div class="learning">
-    <h1>Learning is Awesome!</h1>
-    <p>Every expert was once a beginner.</p>
-</div>
-\`\`\`
-
-> *"The only way to learn a new programming language is by writing programs in it."* - Dennis Ritchie
-
-Ready to dive deeper into this topic?`,
-          delay: 1600
-        }
-      ];
-
-      const randomResponse = botResponses[Math.floor(Math.random() * botResponses.length)];
-      
-      // Calculate response time
-      const responseTime = Date.now() - responseStartTime;
+      const data = await response.json();
       
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: randomResponse.text,
+        text: data.response,
         isUser: false,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        responseTime: responseTime
+        responseTime: Math.round(data.response_time * 1000)
       };
 
       // Create log entry for this interaction
@@ -321,17 +258,15 @@ Ready to dive deeper into this topic?`,
         id: Date.now().toString(),
         date: new Date().toLocaleDateString(),
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        model: currentBotConfig?.model || 'GPT-4o',
+        model: data.model,
         prompt: messageText,
-        response: randomResponse.text
+        response: data.response
       };
-
-      console.log('Creating log entry:', logEntry); // Debug log
 
       // Add log entry and keep only last 5
       setLogs(prev => {
         const newLogs = [logEntry, ...prev.slice(0, 4)];
-        console.log('Updated logs:', newLogs); // Debug log
+        console.log('Updated logs:', newLogs);
         return newLogs;
       });
 
@@ -355,8 +290,30 @@ Ready to dive deeper into this topic?`,
         return chat;
       }));
       
+    } catch (error) {
+      console.error('Error calling backend API:', error);
+      
+      // Fallback error message
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: `Sorry, I encountered an error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        isUser: false,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        responseTime: 0
+      };
+
+      setChats(prev => prev.map(chat => {
+        if (chat.id === activeChatId) {
+          return {
+            ...chat,
+            messages: [...chat.messages, errorMessage]
+          };
+        }
+        return chat;
+      }));
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   const handleNewChat = () => {

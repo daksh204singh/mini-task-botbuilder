@@ -15,22 +15,20 @@ interface BotCreationModalProps {
 const BotCreationModal: React.FC<BotCreationModalProps> = ({ isOpen, onClose, onSave }) => {
   const [botName, setBotName] = useState('');
   const [persona, setPersona] = useState('');
-  const [selectedModel, setSelectedModel] = useState('gpt-4');
+  const [selectedModel, setSelectedModel] = useState('gemini-2.0-flash-exp');
 
   // Character limits
   const BOT_NAME_LIMIT = 15;
   const PERSONA_LIMIT = 60;
 
   const models = [
-    { id: 'gpt-4', name: 'GPT-4', description: 'Most capable model for complex tasks' },
-    { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', description: 'Fast and efficient for most tasks' },
-    { id: 'claude-3', name: 'Claude 3', description: 'Excellent for analysis and writing' },
-    { id: 'gemini-pro', name: 'Gemini Pro', description: 'Great for creative and technical tasks' }
+    { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash', description: 'Latest fast and efficient model for general tasks' },
+    { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', description: 'Previous generation fast model' }
   ];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (botName.trim() && persona.trim()) {
+    if (botName.trim() && persona.trim() && selectedModel) {
       onSave({
         name: botName.trim(),
         persona: persona.trim(),
@@ -39,7 +37,7 @@ const BotCreationModal: React.FC<BotCreationModalProps> = ({ isOpen, onClose, on
       // Reset form
       setBotName('');
       setPersona('');
-      setSelectedModel('gpt-4');
+      setSelectedModel('gemini-2.0-flash-exp');
     }
   };
 
@@ -110,6 +108,7 @@ const BotCreationModal: React.FC<BotCreationModalProps> = ({ isOpen, onClose, on
               id="model"
               value={selectedModel}
               onChange={(e) => setSelectedModel(e.target.value)}
+              required
             >
               {models.map(model => (
                 <option key={model.id} value={model.id}>
