@@ -31,6 +31,16 @@ jobs:
         cache: 'npm'
         cache-dependency-path: frontend/package-lock.json
         
+    - name: Debug - List files
+      run: |
+        echo "Current directory: $(pwd)"
+        echo "Frontend directory contents:"
+        ls -la frontend/
+        echo "Public directory contents:"
+        ls -la frontend/public/
+        echo "Assets directory contents:"
+        ls -la frontend/public/assets/
+        
     - name: Install dependencies
       run: |
         cd frontend
@@ -40,6 +50,11 @@ jobs:
       run: |
         cd frontend
         npm run build
+        
+    - name: Debug - Check build output
+      run: |
+        echo "Build directory contents:"
+        ls -la frontend/build/
         
     - name: Setup Pages
       uses: actions/configure-pages@v4
