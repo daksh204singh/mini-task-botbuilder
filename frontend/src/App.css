@@ -1034,6 +1034,14 @@ body {
   cursor: pointer;
 }
 
+.character-count {
+  font-size: 11px;
+  color: #718096;
+  text-align: right;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
 .modal-actions {
   display: flex;
   gap: 12px;

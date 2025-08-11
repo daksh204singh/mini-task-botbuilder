@@ -17,6 +17,10 @@ const BotCreationModal: React.FC<BotCreationModalProps> = ({ isOpen, onClose, on
   const [persona, setPersona] = useState('');
   const [selectedModel, setSelectedModel] = useState('gpt-4');
 
+  // Character limits
+  const BOT_NAME_LIMIT = 15;
+  const PERSONA_LIMIT = 60;
+
   const models = [
     { id: 'gpt-4', name: 'GPT-4', description: 'Most capable model for complex tasks' },
     { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', description: 'Fast and efficient for most tasks' },
@@ -36,6 +40,20 @@ const BotCreationModal: React.FC<BotCreationModalProps> = ({ isOpen, onClose, on
       setBotName('');
       setPersona('');
       setSelectedModel('gpt-4');
+    }
+  };
+
+  const handleBotNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (value.length <= BOT_NAME_LIMIT) {
+      setBotName(value);
+    }
+  };
+
+  const handlePersonaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (value.length <= PERSONA_LIMIT) {
+      setPersona(value);
     }
   };
 
@@ -60,22 +78,30 @@ const BotCreationModal: React.FC<BotCreationModalProps> = ({ isOpen, onClose, on
               id="botName"
               type="text"
               value={botName}
-              onChange={(e) => setBotName(e.target.value)}
-              placeholder="e.g., Math Tutor, Science Helper, Code Mentor"
+              onChange={handleBotNameChange}
+              placeholder="e.g., Math Tutor, Science Helper"
+              maxLength={BOT_NAME_LIMIT}
               required
             />
+            <div className="character-count">
+              {botName.length}/{BOT_NAME_LIMIT}
+            </div>
           </div>
           
           <div className="form-group">
             <label htmlFor="persona">Persona</label>
-            <textarea
+            <input
               id="persona"
+              type="text"
               value={persona}
-              onChange={(e) => setPersona(e.target.value)}
-              placeholder="Describe your bot's personality, teaching style, and expertise..."
-              rows={3}
+              onChange={handlePersonaChange}
+              placeholder="e.g., Friendly math tutor who explains concepts clearly"
+              maxLength={PERSONA_LIMIT}
               required
             />
+            <div className="character-count">
+              {persona.length}/{PERSONA_LIMIT}
+            </div>
           </div>
           
           <div className="form-group">
