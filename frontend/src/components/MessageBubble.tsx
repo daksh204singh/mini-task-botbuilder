@@ -27,7 +27,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
       {!message.isUser && (
         <div className="bot-avatar">
           <img 
-            src="/assets/colorizeAnimationTest3.gif" 
+            src="/assets/AIRobot.jpg" 
             alt="Bot Avatar" 
             className="robot-icon-small"
           />

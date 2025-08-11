@@ -1,6 +1,7 @@
 import React from 'react';
 import { BotConfig } from './BotCreationModal';
 import { Message } from './MessageBubble';
+import { LogEntry } from './LogsPanel';
 
 export interface Chat {
   id: string;
@@ -12,6 +13,7 @@ export interface Chat {
   messageCount?: number;
   botConfig?: BotConfig;
   conversation_id?: string; // Database conversation ID
+  logs?: LogEntry[]; // Chat-specific logs
 }
 
 interface SidebarProps {

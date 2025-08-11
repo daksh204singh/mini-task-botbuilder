@@ -921,10 +921,11 @@ body {
 .modal-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   padding: 24px 24px 0 24px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   margin-bottom: 24px;
+  position: relative;
 }
 
 .modal-header h2 {
@@ -932,6 +933,7 @@ body {
   font-weight: 600;
   color: #ffffff;
   margin: 0;
+  padding-right: 60px;
   background: linear-gradient(135deg, #ff0080, #00ffff);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -950,6 +952,10 @@ body {
   align-items: center;
   justify-content: center;
   transition: all 0.3s ease;
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  z-index: 10;
 }
 
 .modal-close:hover {
@@ -1074,6 +1080,22 @@ body {
   
   .modal-header {
     padding: 20px 20px 0 20px;
+  }
+  
+  .modal-close {
+    top: 10px;
+    right: 15px;
+    width: 36px;
+    height: 36px;
+  }
+  
+  .modal-close svg {
+    width: 18px;
+    height: 18px;
+  }
+  
+  .modal-header h2 {
+    padding-right: 50px;
   }
   
   .modal-form {

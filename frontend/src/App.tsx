@@ -17,7 +17,6 @@ function App() {
   const [currentBotConfig, setCurrentBotConfig] = useState<BotConfig | undefined>(undefined);
   const [isInitialized, setIsInitialized] = useState(false);
   const [showLogsPanel, setShowLogsPanel] = useState(false);
-  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
 
   // Initialize session and load data from localStorage on component mount
@@ -56,7 +55,6 @@ function App() {
         const savedActiveChatId = localStorage.getItem('mini-task-activeChatId');
         const savedCurrentBotConfig = localStorage.getItem('mini-task-currentBotConfig');
         const savedSidebarOpen = localStorage.getItem('mini-task-sidebarOpen');
-        const savedLogs = localStorage.getItem('mini-task-logs');
 
         console.log('Saved chats:', savedChats);
         console.log('Saved active chat ID:', savedActiveChatId);
@@ -79,13 +77,6 @@ function App() {
         
         if (savedSidebarOpen !== null) {
           setSidebarOpen(JSON.parse(savedSidebarOpen));
-        }
-        
-        if (savedLogs) {
-          const parsedLogs = JSON.parse(savedLogs);
-          if (Array.isArray(parsedLogs)) {
-            setLogs(parsedLogs);
-          }
         }
         
         setIsInitialized(true);
@@ -151,16 +142,7 @@ function App() {
     }
   }, [sidebarOpen, isInitialized]);
 
-  // Save logs to localStorage whenever they change
-  useEffect(() => {
-    if (!isInitialized) return;
-    
-    try {
-      localStorage.setItem('mini-task-logs', JSON.stringify(logs));
-    } catch (error) {
-      console.error('Error saving logs to localStorage:', error);
-    }
-  }, [logs, isInitialized]);
+
 
 
 
@@ -275,12 +257,19 @@ function App() {
         response: data.response
       };
 
-      // Add log entry and keep only last 5
-      setLogs(prev => {
-        const newLogs = [logEntry, ...prev.slice(0, 4)];
-        console.log('Updated logs:', newLogs);
-        return newLogs;
-      });
+      // Add log entry to the active chat and keep only last 5
+      setChats(prev => prev.map(chat => {
+        if (chat.id === activeChatId) {
+          const currentLogs = chat.logs || [];
+          const newLogs = [logEntry, ...currentLogs.slice(0, 4)];
+          console.log('Updated logs for chat:', chat.id, newLogs);
+          return {
+            ...chat,
+            logs: newLogs
+          };
+        }
+        return chat;
+      }));
 
       // Update the active chat with the bot response
       setChats(prev => prev.map(chat => {
@@ -432,20 +421,14 @@ function App() {
         response: data.response
       };
 
-      // Add welcome log entry
-      setLogs(prev => {
-        const newLogs = [welcomeLogEntry, ...prev.slice(0, 4)];
-        console.log('Added welcome log entry:', newLogs);
-        return newLogs;
-      });
-
-      // Update the new chat with the welcome message and conversation_id
+      // Update the new chat with the welcome message, conversation_id, and log entry
       setChats(prev => prev.map(chat => {
         if (chat.id === newChat.id) {
           return {
             ...chat,
             messages: [welcomeMessage],
-            conversation_id: data.conversation_id
+            conversation_id: data.conversation_id,
+            logs: [welcomeLogEntry]
           };
         }
         return chat;
@@ -481,19 +464,13 @@ I'm here to help you learn and grow. Feel free to ask me anything!
         response: fallbackMessage.text
       };
 
-      // Add fallback log entry
-      setLogs(prev => {
-        const newLogs = [fallbackLogEntry, ...prev.slice(0, 4)];
-        console.log('Added fallback welcome log entry:', newLogs);
-        return newLogs;
-      });
-
-      // Update the new chat with the fallback welcome message
+      // Update the new chat with the fallback welcome message and log entry
       setChats(prev => prev.map(chat => {
         if (chat.id === newChat.id) {
           return {
             ...chat,
-            messages: [fallbackMessage]
+            messages: [fallbackMessage],
+            logs: [fallbackLogEntry]
           };
         }
         return chat;
@@ -546,15 +523,12 @@ I'm here to help you learn and grow. Feel free to ask me anything!
       localStorage.removeItem('mini-task-activeChatId');
       localStorage.removeItem('mini-task-currentBotConfig');
       localStorage.removeItem('mini-task-sidebarOpen');
-      localStorage.removeItem('mini-task-logs');
-      
       // Reset state
       setChats([]);
       setActiveChatId(null);
       setCurrentBotConfig(undefined);
       setSidebarOpen(true);
       setShowBotModal(false);
-      setLogs([]);
     } catch (error) {
       console.error('Error clearing data:', error);
     }
@@ -622,10 +596,10 @@ I'm here to help you learn and grow. Feel free to ask me anything!
         onSave={handleBotCreation}
       />
 
-      {showLogsPanel && (
+      {showLogsPanel && activeChat && (
         <LogsPanel
           onClose={() => setShowLogsPanel(false)}
-          logs={logs}
+          logs={activeChat.logs || []}
         />
       )}
     </div>

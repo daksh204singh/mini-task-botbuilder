@@ -21,7 +21,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle, onLogsToggle }) => {
           </button>
           <div className="robot-avatar">
             <img 
-              src="/assets/colorizeAnimationTest3.gif" 
+              src="/assets/AIRobot.jpg" 
               alt="Bot Avatar" 
               className="robot-icon"
             />
