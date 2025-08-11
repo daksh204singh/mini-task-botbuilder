@@ -9,7 +9,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 class VectorService:
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2", index_path: str = "conversation_vectors.faiss", metadata_path: str = "vector_metadata.pkl"):
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2", 
+                 index_path: str = "conversation_vectors.faiss", 
+                 metadata_path: str = "vector_metadata.pkl",
+                 min_similarity_threshold: float = 0.3,
+                 max_context_messages: int = 5):
         """
         Initialize the vector service with FAISS index and sentence transformer model
         
@@ -17,10 +21,19 @@ class VectorService:
             model_name: Name of the sentence transformer model to use
             index_path: Path to save/load the FAISS index
             metadata_path: Path to save/load vector metadata
+            min_similarity_threshold: Minimum similarity score for search results
+            max_context_messages: Maximum number of context messages to return
         """
         self.model_name = model_name
         self.index_path = index_path
         self.metadata_path = metadata_path
+        self.min_similarity_threshold = min_similarity_threshold
+        self.max_context_messages = max_context_messages
+        
+        # Analytics tracking
+        self._total_searches = 0
+        self._successful_searches = 0
+        self._total_results = 0
         
         # Initialize sentence transformer model
         try:
@@ -36,6 +49,65 @@ class VectorService:
         self.dimension = self.model.get_sentence_embedding_dimension()
         
         self._load_or_create_index()
+    
+    def preprocess_query(self, query: str) -> str:
+        """Clean and normalize query for better search"""
+        # Remove extra whitespace and normalize
+        query = " ".join(query.strip().lower().split())
+        return query
+    
+    def expand_query(self, query: str) -> List[str]:
+        """Generate alternative queries for better search coverage"""
+        expanded = [query]
+        
+        # Add common variations
+        if "?" in query:
+            expanded.append(query.replace("?", ""))
+        if "what" in query.lower():
+            expanded.append(query.replace("what", "how"))
+        if "how" in query.lower():
+            expanded.append(query.replace("how", "what"))
+        
+        return expanded
+    
+    def validate_index(self) -> bool:
+        """Validate FAISS index integrity"""
+        try:
+            if not hasattr(self, 'index') or not hasattr(self, 'metadata'):
+                return False
+            
+            # Check if metadata and index are aligned
+            if len(self.metadata) != self.index.ntotal:
+                logger.warning(f"Index metadata mismatch: {len(self.metadata)} metadata vs {self.index.ntotal} vectors")
+                return False
+            
+            # Check if index is not empty
+            if self.index.ntotal == 0:
+                logger.warning("FAISS index is empty")
+                return False
+            
+            return True
+        except Exception as e:
+            logger.error(f"Error validating index: {e}")
+            return False
+    
+    def recover_index(self) -> bool:
+        """Recover corrupted index by rebuilding"""
+        try:
+            logger.info("Attempting to recover corrupted index...")
+            
+            # Create new index
+            self.index = faiss.IndexFlatIP(self.dimension)
+            self.metadata = []
+            
+            # Save clean index
+            self._save_index()
+            
+            logger.info("Index recovery completed")
+            return True
+        except Exception as e:
+            logger.error(f"Error recovering index: {e}")
+            return False
     
     def _load_or_create_index(self):
         """Load existing FAISS index or create a new one"""
@@ -118,28 +190,39 @@ class VectorService:
             logger.error(f"Error adding conversation embeddings: {e}")
             return False
     
-    def search_similar_messages(self, query: str, conversation_id: Optional[str] = None, k: int = 5) -> List[Dict]:
+    def search_similar_messages(self, query: str, conversation_id: Optional[str] = None, k: int = 5, min_score: float = None) -> List[Dict]:
         """
-        Search for similar messages in the vector database
+        Search for similar messages in the vector database with enhanced filtering
         
         Args:
             query: Search query text
             conversation_id: Optional conversation ID to filter results
             k: Number of results to return
+            min_score: Minimum similarity score threshold (overrides default)
         
         Returns:
             List of dictionaries with similar messages and their metadata
         """
         try:
-            # Generate query embedding
-            query_embedding = self.model.encode([query], convert_to_tensor=False)
+            # Update analytics
+            self._total_searches += 1
             
-            # Search in FAISS index
-            scores, indices = self.index.search(query_embedding.astype('float32'), min(k * 2, self.index.ntotal))
+            # Use provided min_score or default threshold
+            threshold = min_score if min_score is not None else self.min_similarity_threshold
+            
+            # Preprocess query
+            processed_query = self.preprocess_query(query)
+            
+            # Generate query embedding
+            query_embedding = self.model.encode([processed_query], convert_to_tensor=False)
+            
+            # Search in FAISS index with more candidates for better filtering
+            search_k = min(k * 3, self.index.ntotal)
+            scores, indices = self.index.search(query_embedding.astype('float32'), search_k)
             
             results = []
             for score, idx in zip(scores[0], indices[0]):
-                if idx == -1:  # FAISS returns -1 for empty slots
+                if idx == -1 or score < threshold:  # Filter by similarity threshold
                     continue
                 
                 if idx < len(self.metadata):
@@ -161,7 +244,12 @@ class VectorService:
                     if len(results) >= k:
                         break
             
-            logger.info(f"Found {len(results)} similar messages for query: {query[:50]}...")
+            # Update analytics
+            if results:
+                self._successful_searches += 1
+                self._total_results += len(results)
+            
+            logger.info(f"Found {len(results)} similar messages for query: {query[:50]}... (min_score: {threshold})")
             return results
             
         except Exception as e:
@@ -222,4 +310,17 @@ class VectorService:
             'dimension': self.dimension,
             'model_name': self.model_name,
             'conversations': len(set(m['conversation_id'] for m in self.metadata)) if self.metadata else 0
+        }
+
+    def get_search_analytics(self) -> Dict:
+        """Get analytics about search performance"""
+        avg_results = self._total_results / max(self._total_searches, 1)
+        return {
+            "total_searches": self._total_searches,
+            "successful_searches": self._successful_searches,
+            "success_rate": self._successful_searches / max(self._total_searches, 1),
+            "average_results_per_search": avg_results,
+            "index_size": self.index.ntotal if hasattr(self, 'index') else 0,
+            "metadata_size": len(self.metadata) if hasattr(self, 'metadata') else 0,
+            "min_similarity_threshold": self.min_similarity_threshold
         }

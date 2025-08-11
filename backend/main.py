@@ -73,6 +73,7 @@ class ChatResponse(BaseModel):
     tokens_used: Optional[int] = None
     conversation_id: str
     session_id: str
+    context_used: Optional[bool] = None
 
 @app.get("/")
 async def root():
@@ -142,7 +143,8 @@ async def chat(request: ChatRequest):
             response_time=result["response_time"],
             tokens_used=result["tokens_used"],
             conversation_id=conversation_id,
-            session_id=session_id
+            session_id=session_id,
+            context_used=result.get("context_used", False)
         )
         
     except HTTPException:
@@ -258,3 +260,80 @@ async def get_vector_stats():
     except Exception as e:
         logger.error(f"Error getting vector stats: {e}")
         raise HTTPException(status_code=500, detail=f"Error getting vector stats: {str(e)}")
+
+@app.get("/rag/analytics")
+async def get_rag_analytics():
+    """Get analytics about RAG search performance"""
+    try:
+        analytics = database_service.get_search_analytics()
+        return analytics
+    except Exception as e:
+        logger.error(f"Error getting RAG analytics: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting RAG analytics: {str(e)}")
+
+@app.get("/rag/validate")
+async def validate_rag_index():
+    """Validate the RAG index integrity"""
+    try:
+        is_valid = database_service.validate_index()
+        return {"valid": is_valid}
+    except Exception as e:
+        logger.error(f"Error validating RAG index: {e}")
+        raise HTTPException(status_code=500, detail=f"Error validating RAG index: {str(e)}")
+
+@app.post("/rag/recover")
+async def recover_rag_index():
+    """Recover corrupted RAG index"""
+    try:
+        success = database_service.recover_index()
+        return {"success": success, "message": "Index recovery completed" if success else "Index recovery failed"}
+    except Exception as e:
+        logger.error(f"Error recovering RAG index: {e}")
+        raise HTTPException(status_code=500, detail=f"Error recovering RAG index: {str(e)}")
+
+@app.get("/rag/search")
+async def enhanced_search(
+    query: str, 
+    conversation_id: Optional[str] = None, 
+    k: int = 5, 
+    min_score: Optional[float] = None
+):
+    """Enhanced search with configurable similarity threshold"""
+    try:
+        results = database_service.enhanced_search_similar_messages(query, conversation_id, k, min_score)
+        return {
+            "results": results, 
+            "query": query, 
+            "count": len(results),
+            "min_score_used": min_score or 0.3
+        }
+    except Exception as e:
+        logger.error(f"Error in enhanced search: {e}")
+        raise HTTPException(status_code=500, detail=f"Error in enhanced search: {str(e)}")
+
+@app.get("/rag/context")
+async def get_enhanced_context(
+    conversation_id: str, 
+    query: str, 
+    k: int = 5,
+    min_score: Optional[float] = None
+):
+    """Get enhanced context from a specific conversation with configurable parameters"""
+    try:
+        # Verify conversation exists
+        conversation = database_service.get_conversation(conversation_id)
+        if not conversation:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        
+        context = database_service.get_enhanced_conversation_context(conversation_id, query, k, min_score)
+        return {
+            "context": context, 
+            "query": query, 
+            "conversation_id": conversation_id,
+            "min_score_used": min_score or 0.3
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting enhanced context: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting enhanced context: {str(e)}")

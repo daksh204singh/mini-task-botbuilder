@@ -262,3 +262,33 @@ class DatabaseService:
         if not self.vector_service:
             return {"error": "Vector service not available"}
         return self.vector_service.get_index_stats()
+    
+    def get_search_analytics(self) -> Dict:
+        """Get analytics about RAG search performance"""
+        if not self.vector_service:
+            return {"error": "Vector service not available"}
+        return self.vector_service.get_search_analytics()
+    
+    def validate_index(self) -> bool:
+        """Validate the RAG index integrity"""
+        if not self.vector_service:
+            return False
+        return self.vector_service.validate_index()
+    
+    def recover_index(self) -> bool:
+        """Recover corrupted RAG index"""
+        if not self.vector_service:
+            return False
+        return self.vector_service.recover_index()
+    
+    def enhanced_search_similar_messages(self, query: str, conversation_id: Optional[str] = None, k: int = 5, min_score: Optional[float] = None) -> List[Dict]:
+        """Enhanced search with configurable similarity threshold"""
+        if not self.vector_service:
+            return []
+        return self.vector_service.search_similar_messages(query, conversation_id, k, min_score)
+    
+    def get_enhanced_conversation_context(self, conversation_id: str, query: str, k: int = 5, min_score: Optional[float] = None) -> List[Dict]:
+        """Get enhanced context from a specific conversation with configurable parameters"""
+        if not self.vector_service:
+            return []
+        return self.vector_service.search_similar_messages(query, conversation_id, k, min_score)

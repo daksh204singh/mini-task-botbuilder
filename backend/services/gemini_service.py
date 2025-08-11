@@ -48,24 +48,30 @@ class GeminiService:
             return f"You are a tutor named {bot_name}, acting as {persona_desc}. Help the user with their questions. Use markdown formatting for your output."
         return "You are a helpful AI assistant. Use markdown formatting for your output."
     
-    def get_relevant_context(self, query: str, conversation_id: Optional[str] = None, k: int = 3) -> str:
-        """Retrieve relevant context from vector database using RAG"""
+    def get_relevant_context(self, query: str, conversation_id: Optional[str] = None, k: int = 5) -> str:
+        """Enhanced context retrieval with better filtering and formatting"""
         if not self.vector_service:
             return ""
         
         try:
-            # Search for similar messages
-            similar_messages = self.vector_service.search_similar_messages(query, conversation_id, k)
+            # Search with lower threshold for more results
+            similar_messages = self.vector_service.search_similar_messages(
+                query, conversation_id, k=k, min_score=0.2
+            )
             
             if not similar_messages:
                 return ""
             
-            # Format context for the AI
+            # Sort by relevance and recency
+            similar_messages.sort(key=lambda x: (x['score'], x['timestamp']), reverse=True)
+            
+            # Format context with better structure
             context_parts = []
             for msg in similar_messages:
                 role = "User" if msg['role'] == 'user' else "Assistant"
                 content = msg['content_preview']
-                context_parts.append(f"{role}: {content}")
+                score = msg['score']
+                context_parts.append(f"{role} (relevance: {score:.2f}): {content}")
             
             context = "\n".join(context_parts)
             logger.info(f"Retrieved {len(similar_messages)} relevant context messages for query: {query[:50]}...")
@@ -76,7 +82,7 @@ class GeminiService:
             return ""
     
     def generate_response(self, messages: List[ChatMessage], persona: Optional[Dict] = None, conversation_id: Optional[str] = None) -> Dict:
-        """Generate response using Gemini API with RAG context"""
+        """Enhanced response generation with better RAG integration"""
         try:
             start_time = time.time()
             
@@ -87,11 +93,23 @@ class GeminiService:
             latest_message = messages[-1].content if messages else ""
             
             # Retrieve relevant context using RAG
-            context = self.get_relevant_context(latest_message, conversation_id, k=3)
+            context = self.get_relevant_context(latest_message, conversation_id, k=5)
             
-            # Build the prompt with context
+            # Build enhanced prompt with context
             if context:
-                context_prompt = f"\n\nRelevant conversation context:\n{context}\n\nCurrent question: {latest_message}\n\nPlease use the context above to provide a relevant and contextual response."
+                context_prompt = f"""
+Relevant conversation context (use this to provide more contextual and consistent responses):
+{context}
+
+Current user question: {latest_message}
+
+Instructions:
+1. Use the context above to provide relevant and contextual responses
+2. If the context contains relevant information, reference it appropriately
+3. Maintain consistency with previous responses in the conversation
+4. If no relevant context is found, provide a general helpful response
+
+Please respond:"""
                 full_prompt = f"{system_prompt}\n\n{context_prompt}\n\nAssistant:"
             else:
                 # No context found, use direct approach
@@ -117,7 +135,8 @@ class GeminiService:
                 "response": response_text,
                 "response_time": response_time,
                 "tokens_used": tokens_used,
-                "success": True
+                "success": True,
+                "context_used": bool(context)  # Track if context was used
             }
             
         except Exception as e:
@@ -127,7 +146,8 @@ class GeminiService:
                 "response_time": 0,
                 "tokens_used": None,
                 "success": False,
-                "error": str(e)
+                "error": str(e),
+                "context_used": False
             }
     
     def validate_api_key(self) -> bool:
