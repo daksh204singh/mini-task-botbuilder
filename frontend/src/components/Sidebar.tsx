@@ -19,6 +19,8 @@ interface SidebarProps {
   onNewChat: () => void;
   onSelectChat: (chatId: string) => void;
   onDeleteChat: (chatId: string) => void;
+  onClearAllData: () => void;
+  storageUsage: { used: number; max: number; percentage: number; totalSize: number };
   isOpen?: boolean;
 }
 
@@ -28,6 +30,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   onNewChat, 
   onSelectChat,
   onDeleteChat,
+  onClearAllData,
+  storageUsage,
   isOpen = true 
 }) => {
   const formatResponseTime = (time: number) => {
@@ -43,6 +47,18 @@ const Sidebar: React.FC<SidebarProps> = ({
     onDeleteChat(chatId);
   };
 
+  const handleClearAllClick = () => {
+    if (window.confirm('Are you sure you want to clear all data? This will delete all chats and cannot be undone.')) {
+      onClearAllData();
+    }
+  };
+
+  const getStorageColor = (percentage: number) => {
+    if (percentage < 50) return '#10b981'; // green
+    if (percentage < 80) return '#f59e0b'; // yellow
+    return '#ef4444'; // red
+  };
+
   return (
     <div className={`sidebar ${isOpen ? 'open' : ''}`}>
       <div className="sidebar-header">
@@ -52,6 +68,35 @@ const Sidebar: React.FC<SidebarProps> = ({
           </svg>
           New Chat
         </button>
+        {chats.length > 0 && (
+          <button className="clear-all-button" onClick={handleClearAllClick} title="Clear all data">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/>
+            </svg>
+            Clear All
+          </button>
+        )}
+      </div>
+      
+      {/* Storage Usage Bar */}
+      <div className="storage-usage-container">
+        <div className="storage-usage-header">
+          <span className="storage-label">Storage</span>
+          <span className="storage-size">{storageUsage.used.toFixed(2)}MB / {storageUsage.max}MB</span>
+        </div>
+        <div className="storage-progress-bar">
+          <div 
+            className="storage-progress-fill"
+            style={{ 
+              width: `${storageUsage.percentage}%`,
+              backgroundColor: getStorageColor(storageUsage.percentage)
+            }}
+          />
+        </div>
+        <div className="storage-stats">
+          <span className="storage-percentage">{storageUsage.percentage.toFixed(1)}% used</span>
+          <span className="storage-messages">{chats.reduce((total, chat) => total + chat.messages.length, 0)} messages</span>
+        </div>
       </div>
       
       <div className="chat-list">

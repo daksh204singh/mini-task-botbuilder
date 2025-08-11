@@ -28,7 +28,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
         </div>
         
         <div className="header-center">
-          <h1 className="app-title">Minimal Futuristic Classroom</h1>
+          <h1 className="app-title">TutorBot</h1>
         </div>
       </div>
     </div>

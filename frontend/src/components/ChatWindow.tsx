@@ -75,7 +75,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, isLoading }) => {
         {messages.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">🤖</div>
-            <h3>Welcome to Minimal Futuristic Classroom</h3>
+            <h3>Welcome to TutorBot</h3>
             <p>Start a conversation with your AI tutor. Ask questions, get explanations, or explore any topic you'd like to learn about.</p>
           </div>
         ) : (

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './App.css';
 import Header from './components/Header';
 import ChatWindow from './components/ChatWindow';
@@ -14,6 +14,129 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showBotModal, setShowBotModal] = useState(false);
   const [currentBotConfig, setCurrentBotConfig] = useState<BotConfig | undefined>(undefined);
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // Load data from localStorage on component mount
+  useEffect(() => {
+    try {
+      console.log('Loading data from localStorage...');
+      const savedChats = localStorage.getItem('mini-task-chats');
+      const savedActiveChatId = localStorage.getItem('mini-task-activeChatId');
+      const savedCurrentBotConfig = localStorage.getItem('mini-task-currentBotConfig');
+      const savedSidebarOpen = localStorage.getItem('mini-task-sidebarOpen');
+
+      console.log('Saved chats:', savedChats);
+      console.log('Saved active chat ID:', savedActiveChatId);
+
+      if (savedChats) {
+        const parsedChats = JSON.parse(savedChats);
+        console.log('Parsed chats:', parsedChats);
+        if (Array.isArray(parsedChats) && parsedChats.length > 0) {
+          setChats(parsedChats);
+        }
+      }
+      
+      if (savedActiveChatId) {
+        setActiveChatId(savedActiveChatId);
+      }
+      
+      if (savedCurrentBotConfig) {
+        setCurrentBotConfig(JSON.parse(savedCurrentBotConfig));
+      }
+      
+      if (savedSidebarOpen !== null) {
+        setSidebarOpen(JSON.parse(savedSidebarOpen));
+      }
+      
+      setIsInitialized(true);
+    } catch (error) {
+      console.error('Error loading from localStorage:', error);
+      setIsInitialized(true);
+    }
+  }, []);
+
+  // Save chats to localStorage whenever chats change (but only after initialization)
+  useEffect(() => {
+    if (!isInitialized) return;
+    
+    try {
+      console.log('Saving chats to localStorage:', chats);
+      localStorage.setItem('mini-task-chats', JSON.stringify(chats));
+    } catch (error) {
+      console.error('Error saving chats to localStorage:', error);
+    }
+  }, [chats, isInitialized]);
+
+  // Save activeChatId to localStorage whenever it changes
+  useEffect(() => {
+    if (!isInitialized) return;
+    
+    try {
+      if (activeChatId) {
+        localStorage.setItem('mini-task-activeChatId', activeChatId);
+      } else {
+        localStorage.removeItem('mini-task-activeChatId');
+      }
+    } catch (error) {
+      console.error('Error saving activeChatId to localStorage:', error);
+    }
+  }, [activeChatId, isInitialized]);
+
+  // Save currentBotConfig to localStorage whenever it changes
+  useEffect(() => {
+    if (!isInitialized) return;
+    
+    try {
+      if (currentBotConfig) {
+        localStorage.setItem('mini-task-currentBotConfig', JSON.stringify(currentBotConfig));
+      } else {
+        localStorage.removeItem('mini-task-currentBotConfig');
+      }
+    } catch (error) {
+      console.error('Error saving currentBotConfig to localStorage:', error);
+    }
+  }, [currentBotConfig, isInitialized]);
+
+  // Save sidebarOpen to localStorage whenever it changes
+  useEffect(() => {
+    if (!isInitialized) return;
+    
+    try {
+      localStorage.setItem('mini-task-sidebarOpen', JSON.stringify(sidebarOpen));
+    } catch (error) {
+      console.error('Error saving sidebarOpen to localStorage:', error);
+    }
+  }, [sidebarOpen, isInitialized]);
+
+  // Calculate storage usage
+  const getStorageUsage = () => {
+    try {
+      let totalSize = 0;
+      const keys = ['mini-task-chats', 'mini-task-activeChatId', 'mini-task-currentBotConfig', 'mini-task-sidebarOpen'];
+      
+      keys.forEach(key => {
+        const item = localStorage.getItem(key);
+        if (item) {
+          totalSize += item.length;
+        }
+      });
+      
+      // Convert to MB (1 character = 2 bytes in UTF-16)
+      const sizeInMB = (totalSize * 2) / (1024 * 1024);
+      const maxSizeInMB = 5; // Conservative estimate of 5MB limit
+      const percentage = (sizeInMB / maxSizeInMB) * 100;
+      
+      return {
+        used: sizeInMB,
+        max: maxSizeInMB,
+        percentage: Math.min(percentage, 100),
+        totalSize
+      };
+    } catch (error) {
+      console.error('Error calculating storage usage:', error);
+      return { used: 0, max: 5, percentage: 0, totalSize: 0 };
+    }
+  };
 
   // Get current active chat's messages
   const activeChat = chats.find(chat => chat.id === activeChatId);
@@ -288,6 +411,31 @@ I'm here to help you learn and grow. Feel free to ask me anything!
     }
   };
 
+  const clearAllData = () => {
+    try {
+      // Clear localStorage
+      localStorage.removeItem('mini-task-chats');
+      localStorage.removeItem('mini-task-activeChatId');
+      localStorage.removeItem('mini-task-currentBotConfig');
+      localStorage.removeItem('mini-task-sidebarOpen');
+      
+      // Reset state
+      setChats([]);
+      setActiveChatId(null);
+      setCurrentBotConfig(undefined);
+      setSidebarOpen(true);
+      setShowBotModal(false);
+    } catch (error) {
+      console.error('Error clearing data:', error);
+    }
+  };
+
+  // Check if we should show the welcome screen (no chats at all)
+  const shouldShowWelcomeScreen = chats.length === 0;
+  
+  // Check if we should show the no-active-chat message (has chats but none selected)
+  const shouldShowNoActiveChat = chats.length > 0 && !activeChatId;
+
   return (
     <div className="App">
       {chats.length > 0 && (
@@ -297,6 +445,8 @@ I'm here to help you learn and grow. Feel free to ask me anything!
           onNewChat={handleNewChat}
           onSelectChat={handleSelectChat}
           onDeleteChat={handleDeleteChat}
+          onClearAllData={clearAllData}
+          storageUsage={getStorageUsage()}
           isOpen={sidebarOpen}
         />
       )}
@@ -304,13 +454,30 @@ I'm here to help you learn and grow. Feel free to ask me anything!
       <div className="main-content" onClick={handleMainContentClick}>
         <Header onMenuToggle={handleMenuToggle} />
         
-        <ChatWindow messages={messages} isLoading={isLoading} />
-        <InputBar onSendMessage={handleSendMessage} botConfig={currentBotConfig} />
+        {activeChatId ? (
+          <>
+            <ChatWindow messages={messages} isLoading={isLoading} />
+            <InputBar onSendMessage={handleSendMessage} botConfig={currentBotConfig} />
+          </>
+        ) : (
+          <div className="no-active-chat-container">
+            <div className="no-active-chat-content">
+              <div className="no-active-chat-icon">💬</div>
+              <h3>No Active Chat</h3>
+              <p>Select a chat from the sidebar or create a new one to start messaging.</p>
+              <div className="no-active-chat-actions">
+                <button className="new-chat-button-secondary" onClick={handleNewChat}>
+                  New Chat
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         
-        {chats.length === 0 && (
+        {shouldShowWelcomeScreen && (
           <div className="welcome-overlay">
             <div className="welcome-content">
-              <h1>Welcome to Minimal Futuristic Classroom</h1>
+              <h1>Welcome to TutorBot</h1>
               <p>Create your first AI tutor to start learning</p>
               <button className="begin-button" onClick={handleBeginClick}>
                 Begin
