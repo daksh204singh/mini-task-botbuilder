@@ -1,0 +1,15 @@
+[Unit]
+Description=Mini-task CORS Proxy
+After=network.target
+
+[Service]
+Type=simple
+User=dsingh23
+WorkingDirectory=/var/www/mini-task/backend
+Environment=PATH=/var/www/mini-task/backend/venv/bin
+ExecStart=/var/www/mini-task/backend/venv/bin/python cors_proxy.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
