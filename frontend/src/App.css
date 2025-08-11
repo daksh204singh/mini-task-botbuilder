@@ -293,7 +293,10 @@ body {
   max-width: 100%;
   box-sizing: border-box;
   position: relative;
+  transition: margin-right 0.3s ease;
 }
+
+/* Logs panel popup - no layout changes needed */
 
 /* Header */
 .app-header {
@@ -371,6 +374,38 @@ body {
 .header-center {
   flex: 1;
   text-align: center;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  position: absolute;
+  right: 0;
+}
+
+.logs-button {
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logs-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.05);
+}
+
+.logs-button svg {
+  width: 20px;
+  height: 20px;
 }
 
 .app-title {
@@ -1136,6 +1171,10 @@ body {
   
   .mobile-menu-button {
     display: flex;
+  }
+  
+  .logs-button {
+    display: none;
   }
   
   .header-left {

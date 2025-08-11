@@ -6,6 +6,7 @@ import InputBar from './components/InputBar';
 import Sidebar, { Chat } from './components/Sidebar';
 import BotCreationModal, { BotConfig } from './components/BotCreationModal';
 import { Message } from './components/MessageBubble';
+import LogsPanel, { LogEntry } from './components/LogsPanel';
 
 function App() {
   const [isLoading, setIsLoading] = useState(false);
@@ -15,6 +16,8 @@ function App() {
   const [showBotModal, setShowBotModal] = useState(false);
   const [currentBotConfig, setCurrentBotConfig] = useState<BotConfig | undefined>(undefined);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [showLogsPanel, setShowLogsPanel] = useState(false);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
 
   // Load data from localStorage on component mount
   useEffect(() => {
@@ -24,6 +27,7 @@ function App() {
       const savedActiveChatId = localStorage.getItem('mini-task-activeChatId');
       const savedCurrentBotConfig = localStorage.getItem('mini-task-currentBotConfig');
       const savedSidebarOpen = localStorage.getItem('mini-task-sidebarOpen');
+      const savedLogs = localStorage.getItem('mini-task-logs');
 
       console.log('Saved chats:', savedChats);
       console.log('Saved active chat ID:', savedActiveChatId);
@@ -46,6 +50,13 @@ function App() {
       
       if (savedSidebarOpen !== null) {
         setSidebarOpen(JSON.parse(savedSidebarOpen));
+      }
+      
+      if (savedLogs) {
+        const parsedLogs = JSON.parse(savedLogs);
+        if (Array.isArray(parsedLogs)) {
+          setLogs(parsedLogs);
+        }
       }
       
       setIsInitialized(true);
@@ -108,11 +119,22 @@ function App() {
     }
   }, [sidebarOpen, isInitialized]);
 
+  // Save logs to localStorage whenever they change
+  useEffect(() => {
+    if (!isInitialized) return;
+    
+    try {
+      localStorage.setItem('mini-task-logs', JSON.stringify(logs));
+    } catch (error) {
+      console.error('Error saving logs to localStorage:', error);
+    }
+  }, [logs, isInitialized]);
+
   // Calculate storage usage
   const getStorageUsage = () => {
     try {
       let totalSize = 0;
-      const keys = ['mini-task-chats', 'mini-task-activeChatId', 'mini-task-currentBotConfig', 'mini-task-sidebarOpen'];
+      const keys = ['mini-task-chats', 'mini-task-activeChatId', 'mini-task-currentBotConfig', 'mini-task-sidebarOpen', 'mini-task-logs'];
       
       keys.forEach(key => {
         const item = localStorage.getItem(key);
@@ -294,6 +316,25 @@ Ready to dive deeper into this topic?`,
         responseTime: responseTime
       };
 
+      // Create log entry for this interaction
+      const logEntry: LogEntry = {
+        id: Date.now().toString(),
+        date: new Date().toLocaleDateString(),
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        model: currentBotConfig?.model || 'GPT-4o',
+        prompt: messageText,
+        response: randomResponse.text
+      };
+
+      console.log('Creating log entry:', logEntry); // Debug log
+
+      // Add log entry and keep only last 5
+      setLogs(prev => {
+        const newLogs = [logEntry, ...prev.slice(0, 4)];
+        console.log('Updated logs:', newLogs); // Debug log
+        return newLogs;
+      });
+
       // Update the active chat with the bot response
       setChats(prev => prev.map(chat => {
         if (chat.id === activeChatId) {
@@ -341,6 +382,10 @@ Ready to dive deeper into this topic?`,
     setSidebarOpen(!sidebarOpen);
   };
 
+  const handleLogsToggle = () => {
+    setShowLogsPanel(!showLogsPanel);
+  };
+
   const handleMainContentClick = () => {
     if (window.innerWidth <= 768 && sidebarOpen) {
       setSidebarOpen(false);
@@ -385,6 +430,23 @@ I'm here to help you learn and grow. Feel free to ask me anything!
       responseTime: 0
     };
     
+    // Create log entry for the welcome message
+    const welcomeLogEntry: LogEntry = {
+      id: Date.now().toString(),
+      date: new Date().toLocaleDateString(),
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      model: botConfig.model,
+      prompt: "New chat started",
+      response: welcomeMessage.text
+    };
+
+    // Add welcome log entry
+    setLogs(prev => {
+      const newLogs = [welcomeLogEntry, ...prev.slice(0, 4)];
+      console.log('Added welcome log entry:', newLogs);
+      return newLogs;
+    });
+
     // Update the new chat with the welcome message
     setChats(prev => prev.map(chat => {
       if (chat.id === newChat.id) {
@@ -418,6 +480,7 @@ I'm here to help you learn and grow. Feel free to ask me anything!
       localStorage.removeItem('mini-task-activeChatId');
       localStorage.removeItem('mini-task-currentBotConfig');
       localStorage.removeItem('mini-task-sidebarOpen');
+      localStorage.removeItem('mini-task-logs');
       
       // Reset state
       setChats([]);
@@ -425,6 +488,7 @@ I'm here to help you learn and grow. Feel free to ask me anything!
       setCurrentBotConfig(undefined);
       setSidebarOpen(true);
       setShowBotModal(false);
+      setLogs([]);
     } catch (error) {
       console.error('Error clearing data:', error);
     }
@@ -434,7 +498,7 @@ I'm here to help you learn and grow. Feel free to ask me anything!
   const shouldShowWelcomeScreen = chats.length === 0;
   
   // Check if we should show the no-active-chat message (has chats but none selected)
-  const shouldShowNoActiveChat = chats.length > 0 && !activeChatId;
+  // const shouldShowNoActiveChat = chats.length > 0 && !activeChatId;
 
   return (
     <div className="App">
@@ -452,7 +516,7 @@ I'm here to help you learn and grow. Feel free to ask me anything!
       )}
       
       <div className="main-content" onClick={handleMainContentClick}>
-        <Header onMenuToggle={handleMenuToggle} />
+        <Header onMenuToggle={handleMenuToggle} onLogsToggle={handleLogsToggle} />
         
         {activeChatId ? (
           <>
@@ -492,6 +556,13 @@ I'm here to help you learn and grow. Feel free to ask me anything!
         onClose={() => setShowBotModal(false)}
         onSave={handleBotCreation}
       />
+
+      {showLogsPanel && (
+        <LogsPanel
+          onClose={() => setShowLogsPanel(false)}
+          logs={logs}
+        />
+      )}
     </div>
   );
 }
