@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { BotConfig } from './BotCreationModal';
 
 interface InputBarProps {
   onSendMessage: (messageText: string) => void;
+  botConfig?: BotConfig;
 }
 
-const InputBar: React.FC<InputBarProps> = ({ onSendMessage }) => {
+const InputBar: React.FC<InputBarProps> = ({ onSendMessage, botConfig }) => {
   const [inputValue, setInputValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -27,8 +29,10 @@ const InputBar: React.FC<InputBarProps> = ({ onSendMessage }) => {
 
   const adjustTextareaHeight = () => {
     if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 100)}px`;
+      const scrollHeight = textareaRef.current.scrollHeight;
+      const maxHeight = 100; // max-height from CSS
+      const newHeight = Math.min(scrollHeight, maxHeight);
+      textareaRef.current.style.height = `${newHeight}px`;
     }
   };
 
@@ -56,14 +60,29 @@ const InputBar: React.FC<InputBarProps> = ({ onSendMessage }) => {
         
         <div className="bot-info">
           <div className="bot-details">
-            <div className="bot-detail">
-              <span className="bot-detail-label">Model:</span>
-              <span className="bot-detail-value">GPT-4</span>
-            </div>
-            <div className="bot-detail">
-              <span className="bot-detail-label">Persona:</span>
-              <span className="bot-detail-value">Tutor</span>
-            </div>
+            {botConfig ? (
+              <>
+                <div className="bot-detail">
+                  <span className="bot-detail-label">Bot:</span>
+                  <span className="bot-detail-value">{botConfig.name}</span>
+                </div>
+                <div className="bot-detail">
+                  <span className="bot-detail-label">Model:</span>
+                  <span className="bot-detail-value">{botConfig.model}</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="bot-detail">
+                  <span className="bot-detail-label">Model:</span>
+                  <span className="bot-detail-value">GPT-4</span>
+                </div>
+                <div className="bot-detail">
+                  <span className="bot-detail-label">Persona:</span>
+                  <span className="bot-detail-value">Tutor</span>
+                </div>
+              </>
+            )}
           </div>
           
           <button 

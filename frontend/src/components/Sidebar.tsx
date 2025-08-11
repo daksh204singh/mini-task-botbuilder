@@ -1,12 +1,16 @@
 import React from 'react';
+import { BotConfig } from './BotCreationModal';
+import { Message } from './MessageBubble';
 
 export interface Chat {
   id: string;
   title: string;
   date: string;
   isActive: boolean;
+  messages: Message[];
   averageResponseTime?: number;
   messageCount?: number;
+  botConfig?: BotConfig;
 }
 
 interface SidebarProps {

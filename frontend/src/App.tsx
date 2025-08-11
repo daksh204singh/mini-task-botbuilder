@@ -4,17 +4,36 @@ import Header from './components/Header';
 import ChatWindow from './components/ChatWindow';
 import InputBar from './components/InputBar';
 import Sidebar, { Chat } from './components/Sidebar';
+import BotCreationModal, { BotConfig } from './components/BotCreationModal';
 import { Message } from './components/MessageBubble';
 
 function App() {
-  const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [chats, setChats] = useState<Chat[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showBotModal, setShowBotModal] = useState(false);
+  const [currentBotConfig, setCurrentBotConfig] = useState<BotConfig | undefined>(undefined);
+
+  // Get current active chat's messages
+  const activeChat = chats.find(chat => chat.id === activeChatId);
+  const messages = activeChat?.messages || [];
 
   const handleSendMessage = (messageText: string) => {
     if (!messageText.trim()) return;
+
+    // If no active chat exists, create a temporary one
+    if (!activeChatId) {
+      const tempChat: Chat = {
+        id: 'temp-' + Date.now(),
+        title: 'New Chat',
+        date: new Date().toLocaleDateString(),
+        isActive: true,
+        messages: []
+      };
+      setChats([tempChat]);
+      setActiveChatId(tempChat.id);
+    }
 
     const newMessage: Message = {
       id: Date.now().toString(),
@@ -23,17 +42,25 @@ function App() {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    // If this is the first message in a new chat, update the chat title
-    if (messages.length === 0 && activeChatId) {
-      const chatTitle = messageText.length > 30 ? messageText.substring(0, 30) + '...' : messageText;
-      setChats(prev => prev.map(chat => 
-        chat.id === activeChatId 
-          ? { ...chat, title: chatTitle }
-          : chat
-      ));
-    }
+    // Update the active chat with the new message
+    setChats(prev => prev.map(chat => {
+      if (chat.id === activeChatId) {
+        const updatedMessages = [...chat.messages, newMessage];
+        
+        // Update chat title if this is the first message
+        const newTitle = chat.messages.length === 0 
+          ? (messageText.length > 30 ? messageText.substring(0, 30) + '...' : messageText)
+          : chat.title;
+        
+        return {
+          ...chat,
+          title: newTitle,
+          messages: updatedMessages
+        };
+      }
+      return chat;
+    }));
 
-    setMessages(prev => [...prev, newMessage]);
     setIsLoading(true);
 
     // Track response start time
@@ -144,58 +171,47 @@ Ready to dive deeper into this topic?`,
         responseTime: responseTime
       };
 
-      setMessages(prev => {
-        const newMessages = [...prev, botMessage];
-        
-        // Update chat metrics
-        if (activeChatId) {
-          const botMessages = newMessages.filter(msg => !msg.isUser);
+      // Update the active chat with the bot response
+      setChats(prev => prev.map(chat => {
+        if (chat.id === activeChatId) {
+          const updatedMessages = [...chat.messages, botMessage];
+          
+          // Calculate metrics
+          const botMessages = updatedMessages.filter(msg => !msg.isUser);
           const totalResponseTime = botMessages.reduce((sum, msg) => sum + (msg.responseTime || 0), 0);
           const averageResponseTime = botMessages.length > 0 ? totalResponseTime / botMessages.length : 0;
           
-          setChats(prevChats => prevChats.map(chat => 
-            chat.id === activeChatId 
-              ? { 
-                  ...chat, 
-                  averageResponseTime: Math.round(averageResponseTime),
-                  messageCount: newMessages.length
-                }
-              : chat
-          ));
+          return {
+            ...chat,
+            messages: updatedMessages,
+            averageResponseTime: Math.round(averageResponseTime),
+            messageCount: updatedMessages.length
+          };
         }
-        
-        return newMessages;
-      });
+        return chat;
+      }));
       
       setIsLoading(false);
     }, 1500);
   };
 
   const handleNewChat = () => {
-    const newChat: Chat = {
-      id: Date.now().toString(),
-      title: `Chat ${chats.length + 1}`,
-      date: new Date().toLocaleDateString(),
-      isActive: true
-    };
-
-    // Deactivate current chat
-    setChats(prev => prev.map(chat => ({ ...chat, isActive: false })));
-    
-    // Add new chat
-    setChats(prev => [...prev, newChat]);
-    setActiveChatId(newChat.id);
-    setMessages([]);
+    setShowBotModal(true);
   };
 
   const handleSelectChat = (chatId: string) => {
-    setChats(prev => prev.map(chat => ({ 
-      ...chat, 
-      isActive: chat.id === chatId 
+    // Deactivate all chats and activate the selected one
+    setChats(prev => prev.map(chat => ({
+      ...chat,
+      isActive: chat.id === chatId
     })));
+    
     setActiveChatId(chatId);
-    // In a real app, you'd load the messages for this chat
-    setMessages([]);
+    
+    // Get the selected chat's bot config
+    const selectedChat = chats.find(chat => chat.id === chatId);
+    setCurrentBotConfig(selectedChat?.botConfig);
+    // Messages are now automatically loaded from the activeChat computed value
   };
 
   const handleMenuToggle = () => {
@@ -206,6 +222,60 @@ Ready to dive deeper into this topic?`,
     if (window.innerWidth <= 768 && sidebarOpen) {
       setSidebarOpen(false);
     }
+  };
+
+  const handleBotCreation = (botConfig: BotConfig) => {
+    setCurrentBotConfig(botConfig);
+    setShowBotModal(false);
+    
+    // Create new chat with bot config
+    const newChat: Chat = {
+      id: Date.now().toString(),
+      title: botConfig.name,
+      date: new Date().toLocaleDateString(),
+      isActive: true,
+      botConfig: botConfig,
+      messages: [] // Initialize messages for new chat
+    };
+
+    // Deactivate current chat
+    setChats(prev => prev.map(chat => ({ ...chat, isActive: false })));
+    
+    // Add new chat
+    setChats(prev => [...prev, newChat]);
+    setActiveChatId(newChat.id);
+    
+    // Add welcome message
+    const welcomeMessage: Message = {
+      id: Date.now().toString(),
+      text: `# Welcome! I'm ${botConfig.name} 🤖
+
+${botConfig.persona}
+
+I'm here to help you learn and grow. Feel free to ask me anything!
+
+**Model**: ${botConfig.model}
+
+*What would you like to explore today?*`,
+      isUser: false,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      responseTime: 0
+    };
+    
+    // Update the new chat with the welcome message
+    setChats(prev => prev.map(chat => {
+      if (chat.id === newChat.id) {
+        return {
+          ...chat,
+          messages: [welcomeMessage]
+        };
+      }
+      return chat;
+    }));
+  };
+
+  const handleBeginClick = () => {
+    setShowBotModal(true);
   };
 
   return (
@@ -220,9 +290,28 @@ Ready to dive deeper into this topic?`,
       
       <div className="main-content" onClick={handleMainContentClick}>
         <Header onMenuToggle={handleMenuToggle} />
+        
         <ChatWindow messages={messages} isLoading={isLoading} />
-        <InputBar onSendMessage={handleSendMessage} />
+        <InputBar onSendMessage={handleSendMessage} botConfig={currentBotConfig} />
+        
+        {chats.length === 0 && (
+          <div className="welcome-overlay">
+            <div className="welcome-content">
+              <h1>Welcome to Minimal Futuristic Classroom</h1>
+              <p>Create your first AI tutor to start learning</p>
+              <button className="begin-button" onClick={handleBeginClick}>
+                Begin
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+
+      <BotCreationModal
+        isOpen={showBotModal}
+        onClose={() => setShowBotModal(false)}
+        onSave={handleBotCreation}
+      />
     </div>
   );
 }
