@@ -2,6 +2,7 @@ import os
 import logging
 from typing import Dict, List, Optional
 from datetime import datetime
+import threading
 
 from langchain.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -182,22 +183,14 @@ Conversation history (summarized as needed):
             # Get relevant context from vector service
             rag_context = self._get_relevant_context(conversation_id, query)
             
-            # Log context retrieval
-            if rag_context:
-                logger.info("=" * 80)
-                logger.info("RELEVANT CONTEXT RETRIEVED:")
-                logger.info("=" * 80)
-                logger.info(rag_context)
-                logger.info("=" * 80)
-            else:
-                logger.info("No relevant context found for this query")
+            # Context retrieval logging disabled for performance
             
             # Create ConversationChain with memory and prompt
             conversation_chain = ConversationChain(
                 llm=llm,
                 prompt=self.prompt_template,
                 memory=memory,
-                verbose=True,
+                verbose=False,
             )
 
             # Compose a single input string that includes persona, bot name, and RAG context
@@ -216,19 +209,12 @@ Conversation history (summarized as needed):
             result = conversation_chain.invoke(invoke_inputs)
             response_text = result.get("response") if isinstance(result, dict) else str(result)
 
-            # Persist this turn's exchange to the database (memory is in-process only)
-            try:
-                self.database_service.add_message(conversation_id, "user", query)
-                self.database_service.add_message(conversation_id, "assistant", response_text)
-            except Exception as db_err:
-                logger.error(f"Error persisting messages to database: {db_err}")
-
-            # Generate and save conversation summary (persisted summary)
-            # Disabled for mini-task to reduce latency and because persistence isn't required
-            # self._update_conversation_summary(conversation_id, query, response_text)
-
-            # Update vector service with new messages
-            self._update_vector_index(conversation_id, query, response_text)
+            # Defer persistence and vector indexing to a background thread to reduce latency
+            threading.Thread(
+                target=self._post_turn_tasks,
+                args=(conversation_id, query, response_text),
+                daemon=True,
+            ).start()
             
             response_time = time.time() - start_time
             
@@ -251,6 +237,24 @@ Conversation history (summarized as needed):
                 "model": model_name
             }
     
+    def _post_turn_tasks(self, conversation_id: str, user_query: str, assistant_response: str) -> None:
+        """Persist messages and update vector index in background."""
+        try:
+            # Persist this turn's exchange to the database
+            try:
+                self.database_service.add_message(conversation_id, "user", user_query)
+                self.database_service.add_message(conversation_id, "assistant", assistant_response)
+            except Exception as db_err:
+                logger.error(f"Error persisting messages to database: {db_err}")
+
+            # Update vector index with the new messages
+            try:
+                self._update_vector_index(conversation_id, user_query, assistant_response)
+            except Exception as vec_err:
+                logger.error(f"Error updating vector index: {vec_err}")
+        except Exception as e:
+            logger.error(f"Error in post-turn tasks: {e}")
+
     def _get_relevant_context(self, conversation_id: str, query: str) -> str:
         """Get relevant context from vector service"""
         try:
