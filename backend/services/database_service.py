@@ -4,7 +4,6 @@ import json
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime
 import logging
-from .vector_service import VectorService
 
 logger = logging.getLogger(__name__)
 
@@ -12,14 +11,6 @@ class DatabaseService:
     def __init__(self, db_path: str = "conversations.db"):
         self.db_path = db_path
         self.init_database()
-        
-        # Initialize vector service
-        try:
-            self.vector_service = VectorService()
-            logger.info("Vector service initialized successfully")
-        except Exception as e:
-            logger.error(f"Failed to initialize vector service: {e}")
-            self.vector_service = None
     
     def init_database(self):
         """Initialize database tables if they don't exist"""
@@ -49,20 +40,6 @@ class DatabaseService:
                         content TEXT NOT NULL,
                         timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         tokens_used INTEGER DEFAULT 0,
-                        FOREIGN KEY (conversation_id) REFERENCES conversations (id)
-                    )
-                """)
-                
-                # Create message_embeddings table for future RAG functionality
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS message_embeddings (
-                        id TEXT PRIMARY KEY,
-                        message_id TEXT NOT NULL,
-                        conversation_id TEXT NOT NULL,
-                        embedding_data BLOB NOT NULL,
-                        content_preview TEXT NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (message_id) REFERENCES messages (id),
                         FOREIGN KEY (conversation_id) REFERENCES conversations (id)
                     )
                 """)
@@ -123,20 +100,6 @@ class DatabaseService:
                 
                 conn.commit()
                 logger.info(f"Added message {message_id} to conversation {conversation_id}")
-                
-                # Add to vector database if vector service is available
-                if self.vector_service:
-                    try:
-                        message_data = {
-                            'id': message_id,
-                            'role': role,
-                            'content': content,
-                            'timestamp': datetime.now().isoformat()
-                        }
-                        self.vector_service.add_conversation_embeddings(conversation_id, [message_data])
-                    except Exception as e:
-                        logger.error(f"Failed to add message to vector database: {e}")
-                
                 return message_id
         except Exception as e:
             logger.error(f"Failed to add message: {e}")
@@ -157,11 +120,11 @@ class DatabaseService:
                 messages = []
                 for row in cursor.fetchall():
                     messages.append({
-                        "id": row[0],
-                        "role": row[1],
-                        "content": row[2],
-                        "timestamp": row[3],
-                        "tokens_used": row[4]
+                        'id': row[0],
+                        'role': row[1],
+                        'content': row[2],
+                        'timestamp': row[3],
+                        'tokens_used': row[4]
                     })
                 
                 return messages
@@ -183,13 +146,13 @@ class DatabaseService:
                 row = cursor.fetchone()
                 if row:
                     return {
-                        "id": row[0],
-                        "session_id": row[1],
-                        "bot_name": row[2],
-                        "persona": row[3],
-                        "model": row[4],
-                        "created_at": row[5],
-                        "updated_at": row[6]
+                        'id': row[0],
+                        'session_id': row[1],
+                        'bot_name': row[2],
+                        'persona': row[3],
+                        'model': row[4],
+                        'created_at': row[5],
+                        'updated_at': row[6]
                     }
                 return None
         except Exception as e:
@@ -211,12 +174,12 @@ class DatabaseService:
                 conversations = []
                 for row in cursor.fetchall():
                     conversations.append({
-                        "id": row[0],
-                        "bot_name": row[1],
-                        "persona": row[2],
-                        "model": row[3],
-                        "created_at": row[4],
-                        "updated_at": row[5]
+                        'id': row[0],
+                        'bot_name': row[1],
+                        'persona': row[2],
+                        'model': row[3],
+                        'created_at': row[4],
+                        'updated_at': row[5]
                     })
                 
                 return conversations
@@ -224,32 +187,11 @@ class DatabaseService:
             logger.error(f"Failed to get session conversations: {e}")
             raise
     
-    def get_all_conversations(self) -> List[Dict]:
-        """Get all conversations from the database"""
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    SELECT id, bot_name, persona, model, created_at, updated_at
-                    FROM conversations 
-                    ORDER BY updated_at DESC
-                """)
-                
-                conversations = []
-                for row in cursor.fetchall():
-                    conversations.append({
-                        "id": row[0],
-                        "bot_name": row[1],
-                        "persona": row[2],
-                        "model": row[3],
-                        "created_at": row[4],
-                        "updated_at": row[5]
-                    })
-                
-                return conversations
-        except Exception as e:
-            logger.error(f"Failed to get all conversations: {e}")
-            raise
+    def get_or_create_session_id(self, session_id: Optional[str] = None) -> str:
+        """Get existing session ID or create a new one"""
+        if session_id:
+            return session_id
+        return str(uuid.uuid4())
     
     def delete_conversation(self, conversation_id: str) -> bool:
         """Delete a conversation and all its messages"""
@@ -257,104 +199,26 @@ class DatabaseService:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
+                # Check if conversation exists
+                cursor.execute("SELECT id FROM conversations WHERE id = ?", (conversation_id,))
+                if not cursor.fetchone():
+                    return False
+                
                 # Delete messages first (due to foreign key constraint)
                 cursor.execute("DELETE FROM messages WHERE conversation_id = ?", (conversation_id,))
+                
+                # Delete conversation summary
+                cursor.execute("DELETE FROM conversation_summaries WHERE conversation_id = ?", (conversation_id,))
                 
                 # Delete conversation
                 cursor.execute("DELETE FROM conversations WHERE id = ?", (conversation_id,))
                 
                 conn.commit()
                 logger.info(f"Deleted conversation {conversation_id}")
-                
-                # Remove from vector database if vector service is available
-                if self.vector_service:
-                    try:
-                        self.vector_service.remove_conversation_embeddings(conversation_id)
-                    except Exception as e:
-                        logger.error(f"Failed to remove conversation from vector database: {e}")
-                
                 return True
         except Exception as e:
             logger.error(f"Failed to delete conversation: {e}")
             raise
-    
-    def get_or_create_session_id(self, session_id: Optional[str] = None) -> str:
-        """Generate a new session ID if none provided, or return existing one"""
-        if not session_id:
-            return str(uuid.uuid4())
-        return session_id
-    
-    def search_similar_messages(self, query: str, conversation_id: Optional[str] = None, k: int = 5) -> List[Dict]:
-        """Search for similar messages using vector database"""
-        if not self.vector_service:
-            return []
-        return self.vector_service.search_similar_messages(query, conversation_id, k)
-    
-    def get_conversation_context(self, conversation_id: str, query: str, k: int = 3) -> List[Dict]:
-        """Get relevant context from a specific conversation for a query"""
-        if not self.vector_service:
-            return []
-        return self.vector_service.get_conversation_context(conversation_id, query, k)
-    
-    def get_vector_stats(self) -> Dict:
-        """Get statistics about the vector database"""
-        if not self.vector_service:
-            return {"error": "Vector service not available"}
-        return self.vector_service.get_index_stats()
-    
-    def get_search_analytics(self) -> Dict:
-        """Get analytics about RAG search performance"""
-        if not self.vector_service:
-            return {"error": "Vector service not available"}
-        return self.vector_service.get_search_analytics()
-    
-    def validate_index(self) -> bool:
-        """Validate the RAG index integrity"""
-        if not self.vector_service:
-            return False
-        return self.vector_service.validate_index()
-    
-    def recover_index(self) -> bool:
-        """Recover corrupted RAG index"""
-        if not self.vector_service:
-            return False
-        return self.vector_service.recover_index()
-    
-    def enhanced_search_similar_messages(self, query: str, conversation_id: Optional[str] = None, k: int = 5, min_score: Optional[float] = None) -> List[Dict]:
-        """Enhanced search with configurable similarity threshold"""
-        if not self.vector_service:
-            return []
-        return self.vector_service.search_similar_messages(query, conversation_id, k, min_score)
-    
-    def get_enhanced_conversation_context(self, conversation_id: str, query: str, k: int = 5, min_score: Optional[float] = None) -> List[Dict]:
-        """Get enhanced context from a specific conversation with configurable parameters"""
-        if not self.vector_service:
-            return []
-        return self.vector_service.search_similar_messages(query, conversation_id, k, min_score)
-    
-    def update_conversation_summary(self, conversation_id: str, topics: List[str], key_questions: List[str], learning_progress: str) -> bool:
-        """Update or create conversation summary"""
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                
-                # Convert lists to JSON strings
-                topics_json = json.dumps(topics)
-                questions_json = json.dumps(key_questions)
-                
-                cursor.execute("""
-                    INSERT OR REPLACE INTO conversation_summaries 
-                    (conversation_id, topics, key_questions, learning_progress, last_updated)
-                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-                """, (conversation_id, topics_json, questions_json, learning_progress))
-                
-                conn.commit()
-                logger.info(f"Updated conversation summary for {conversation_id}")
-                return True
-                
-        except Exception as e:
-            logger.error(f"Failed to update conversation summary: {e}")
-            return False
     
     def get_conversation_summary(self, conversation_id: str) -> Optional[Dict]:
         """Get conversation summary"""
@@ -363,68 +227,70 @@ class DatabaseService:
                 cursor = conn.cursor()
                 cursor.execute("""
                     SELECT topics, key_questions, learning_progress, last_updated
-                    FROM conversation_summaries
+                    FROM conversation_summaries 
                     WHERE conversation_id = ?
                 """, (conversation_id,))
                 
                 row = cursor.fetchone()
                 if row:
                     return {
-                        "topics": json.loads(row[0]) if row[0] else [],
-                        "key_questions": json.loads(row[1]) if row[1] else [],
-                        "learning_progress": row[2],
-                        "last_updated": row[3]
+                        'topics': json.loads(row[0]) if row[0] else [],
+                        'key_questions': json.loads(row[1]) if row[1] else [],
+                        'learning_progress': row[2],
+                        'last_updated': row[3]
                     }
                 return None
-                
         except Exception as e:
             logger.error(f"Failed to get conversation summary: {e}")
-            return None
+            raise
     
-    def get_conversation_insights(self, conversation_id: str) -> Dict:
-        """Get comprehensive conversation insights including summary and statistics"""
+    def update_conversation_summary(self, conversation_id: str, topics: List[str], 
+                                  key_questions: List[str], learning_progress: str) -> bool:
+        """Update conversation summary"""
         try:
-            # Get basic conversation info
-            conversation = self.get_conversation(conversation_id)
-            if not conversation:
-                return {"error": "Conversation not found"}
-            
-            # Get messages
-            messages = self.get_conversation_messages(conversation_id)
-            
-            # Get summary
-            summary = self.get_conversation_summary(conversation_id)
-            
-            # Calculate statistics
-            user_messages = [msg for msg in messages if msg['role'] == 'user']
-            assistant_messages = [msg for msg in messages if msg['role'] == 'assistant']
-            
-            insights = {
-                "conversation": conversation,
-                "total_messages": len(messages),
-                "user_messages": len(user_messages),
-                "assistant_messages": len(assistant_messages),
-                "summary": summary,
-                "recent_questions": [msg['content'] for msg in user_messages[-3:]],
-                "conversation_duration": None
-            }
-            
-            # Calculate conversation duration if we have timestamps
-            if messages:
-                first_msg = messages[0]
-                last_msg = messages[-1]
-                if 'timestamp' in first_msg and 'timestamp' in last_msg:
-                    try:
-                        from datetime import datetime
-                        start_time = datetime.fromisoformat(first_msg['timestamp'].replace('Z', '+00:00'))
-                        end_time = datetime.fromisoformat(last_msg['timestamp'].replace('Z', '+00:00'))
-                        duration = end_time - start_time
-                        insights["conversation_duration"] = str(duration)
-                    except:
-                        pass
-            
-            return insights
-            
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT OR REPLACE INTO conversation_summaries 
+                    (conversation_id, topics, key_questions, learning_progress, last_updated)
+                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """, (
+                    conversation_id,
+                    json.dumps(topics),
+                    json.dumps(key_questions),
+                    learning_progress
+                ))
+                conn.commit()
+                logger.info(f"Updated summary for conversation {conversation_id}")
+                return True
         except Exception as e:
-            logger.error(f"Failed to get conversation insights: {e}")
-            return {"error": str(e)}
+            logger.error(f"Failed to update conversation summary: {e}")
+            raise
+    
+    def get_all_conversations(self) -> List[Dict]:
+        """Get all conversations (for testing/debugging)"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT id, session_id, bot_name, persona, model, created_at, updated_at
+                    FROM conversations 
+                    ORDER BY updated_at DESC
+                """)
+                
+                conversations = []
+                for row in cursor.fetchall():
+                    conversations.append({
+                        'id': row[0],
+                        'session_id': row[1],
+                        'bot_name': row[2],
+                        'persona': row[3],
+                        'model': row[4],
+                        'created_at': row[5],
+                        'updated_at': row[6]
+                    })
+                
+                return conversations
+        except Exception as e:
+            logger.error(f"Failed to get all conversations: {e}")
+            raise
