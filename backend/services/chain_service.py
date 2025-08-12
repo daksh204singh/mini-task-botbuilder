@@ -224,7 +224,8 @@ Conversation history (summarized as needed):
                 logger.error(f"Error persisting messages to database: {db_err}")
 
             # Generate and save conversation summary (persisted summary)
-            self._update_conversation_summary(conversation_id, query, response_text)
+            # Disabled for mini-task to reduce latency and because persistence isn't required
+            # self._update_conversation_summary(conversation_id, query, response_text)
 
             # Update vector service with new messages
             self._update_vector_index(conversation_id, query, response_text)
