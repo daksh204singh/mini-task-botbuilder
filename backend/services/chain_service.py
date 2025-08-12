@@ -8,6 +8,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.schema import BaseMessage, HumanMessage, AIMessage
 from langchain.schema.memory import BaseMemory
 from langchain.chains import ConversationChain
+from langchain.memory import ConversationSummaryBufferMemory
 
 from .database_service import DatabaseService
 from .vector_service import VectorService
@@ -19,16 +20,28 @@ class DatabaseBackedMemory(BaseMemory):
     
     def __init__(self, database_service: DatabaseService, conversation_id: str, max_token_limit: int = 2000):
         super().__init__()
-        self.database_service = database_service
-        self.conversation_id = conversation_id
-        self.max_token_limit = max_token_limit
-        self.messages: List[BaseMessage] = []
+        self._database_service = database_service
+        self._conversation_id = conversation_id
+        self._max_token_limit = max_token_limit
+        self._messages: List[BaseMessage] = []
         self._load_messages()
+    
+    @property
+    def messages(self) -> List[BaseMessage]:
+        return self._messages
+    
+    @property
+    def database_service(self) -> DatabaseService:
+        return self._database_service
+    
+    @property
+    def conversation_id(self) -> str:
+        return self._conversation_id
     
     def _load_messages(self):
         """Load messages from database"""
         try:
-            db_messages = self.database_service.get_conversation_messages(self.conversation_id)
+            db_messages = self._database_service.get_conversation_messages(self._conversation_id)
             self.messages = []
             
             for msg in db_messages:
@@ -37,7 +50,7 @@ class DatabaseBackedMemory(BaseMemory):
                 elif msg['role'] == 'assistant':
                     self.messages.append(AIMessage(content=msg['content']))
             
-            logger.info(f"Loaded {len(self.messages)} messages for conversation {self.conversation_id}")
+            logger.info(f"Loaded {len(self.messages)} messages for conversation {self._conversation_id}")
         except Exception as e:
             logger.error(f"Error loading messages: {e}")
             self.messages = []
@@ -50,7 +63,7 @@ class DatabaseBackedMemory(BaseMemory):
     def load_memory_variables(self, inputs: Dict[str, any]) -> Dict[str, any]:
         """Load memory variables."""
         # Get conversation summary
-        summary_data = self.database_service.get_conversation_summary(self.conversation_id)
+        summary_data = self._database_service.get_conversation_summary(self._conversation_id)
         summary = summary_data.get('learning_progress', '') if summary_data else ''
         
         # Format chat history
@@ -78,13 +91,13 @@ class DatabaseBackedMemory(BaseMemory):
         # Save to database
         try:
             if "input" in inputs:
-                self.database_service.add_message(
-                    self.conversation_id, "user", inputs["input"]
+                self._database_service.add_message(
+                    self._conversation_id, "user", inputs["input"]
                 )
             
             if "output" in outputs:
-                self.database_service.add_message(
-                    self.conversation_id, "assistant", outputs["output"]
+                self._database_service.add_message(
+                    self._conversation_id, "assistant", outputs["output"]
                 )
         except Exception as e:
             logger.error(f"Error saving context to database: {e}")
@@ -100,7 +113,7 @@ class ChainService:
         self.database_service = database_service
         self.vector_service = vector_service
         
-        # Memory cache: conversation_id -> DatabaseBackedMemory
+        # Memory cache: conversation_id -> ConversationSummaryBufferMemory
         self.memory_cache = {}
         
         # Initialize Google Generative AI
@@ -109,134 +122,120 @@ class ChainService:
             raise ValueError("GEMINI_API_KEY environment variable is required")
         
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash-exp",
+            model="gemini-1.5-flash",
             google_api_key=api_key,
             temperature=0.7,
             max_output_tokens=2048
         )
         
-        # Create the prompt template
+        # Create the prompt template using only {history} and {input} to be compatible with ConversationChain
         self.prompt_template = ChatPromptTemplate.from_messages([
-            ("system", """You are {bot_name}, a {persona}. Your primary goal is to be helpful and accurate.
+            (
+                "system",
+                """You are a helpful and accurate AI assistant. Use the prior conversation history to remain consistent.
 
-Here is a summary of our conversation so far:
-{summary}
-
-Here is our recent chat history:
-{chat_history}
-
-Here is some relevant context from our previous discussions:
-{context}
-
-Current Question: {input}
-
-Please provide a helpful and accurate response based on the context and our conversation history."""),
+Conversation history (summarized as needed):
+{history}
+""",
+            ),
             ("human", "{input}")
         ])
         
         logger.info("ChainService initialized successfully")
     
-    def get_or_create_memory_for_conversation(self, conversation_id: str) -> DatabaseBackedMemory:
-        """Get or create a memory object for a conversation (with caching)"""
+    def get_or_create_memory_for_conversation(self, conversation_id: str) -> ConversationSummaryBufferMemory:
+        """Get or create a ConversationSummaryBufferMemory for a conversation (with caching)."""
         if conversation_id not in self.memory_cache:
-            logger.info(f"Creating new memory object for conversation {conversation_id}")
-            self.memory_cache[conversation_id] = DatabaseBackedMemory(
-                self.database_service, conversation_id
+            logger.info(f"Creating new ConversationSummaryBufferMemory for conversation {conversation_id}")
+            # Use same LLM for summarization; memory_key defaults to "history"
+            self.memory_cache[conversation_id] = ConversationSummaryBufferMemory(
+                llm=self.llm,
+                max_token_limit=2000,
+                memory_key="history",
+                return_messages=False,
             )
         return self.memory_cache[conversation_id]
     
-    def invoke_chain(self, conversation_id: str, query: str, persona: Dict, model_name: str = "gemini-2.0-flash-exp") -> Dict:
-        """
-        Invoke the conversation chain for single turn using LangChain's ConversationChain
-        """
+    def invoke_chain(self, conversation_id: str, query: str, persona: Dict, model_name: str = "gemini-1.5-flash") -> Dict:
+        """Invoke the conversation chain for a single turn using ConversationChain with CSBM."""
         try:
             import time
             start_time = time.time()
             
-            # Update model if different
-            if model_name != "gemini-2.0-flash-exp":
-                self.llm.model = model_name
+            # Create a fresh LLM instance if the model name differs
+            llm = self.llm
+            try:
+                current_model_name = getattr(self.llm, "model_name", getattr(self.llm, "model", None))
+            except Exception:
+                current_model_name = None
+            if model_name and model_name != current_model_name:
+                llm = ChatGoogleGenerativeAI(
+                    model=model_name,
+                    google_api_key=os.getenv("GEMINI_API_KEY"),
+                    temperature=0.7,
+                    max_output_tokens=2048,
+                )
             
             # Get or create memory object from cache
             memory = self.get_or_create_memory_for_conversation(conversation_id)
             
             # Get relevant context from vector service
-            context = self._get_relevant_context(conversation_id, query)
+            rag_context = self._get_relevant_context(conversation_id, query)
             
             # Log context retrieval
-            if context:
+            if rag_context:
                 logger.info("=" * 80)
                 logger.info("RELEVANT CONTEXT RETRIEVED:")
                 logger.info("=" * 80)
-                logger.info(context)
+                logger.info(rag_context)
                 logger.info("=" * 80)
             else:
                 logger.info("No relevant context found for this query")
             
-            # Create ConversationChain with memory
+            # Create ConversationChain with memory and prompt
             conversation_chain = ConversationChain(
-                llm=self.llm,
+                llm=llm,
+                prompt=self.prompt_template,
                 memory=memory,
-                verbose=False  # We'll handle our own logging
+                verbose=True,
             )
-            
-            # Prepare inputs for the chain
-            inputs = {
-                "input": query,
-                "bot_name": persona.get('bot_name', 'Assistant'),
-                "persona": persona.get('persona', 'helpful AI assistant'),
-                "context": context
-            }
-            
-            # Log the complete prompt being sent to the LLM
-            logger.info("=" * 80)
-            logger.info("LLM PROMPT BEING SENT:")
-            logger.info("=" * 80)
-            
-            # Format the prompt for logging
-            formatted_prompt = f"""System: You are {inputs['bot_name']}, a {inputs['persona']}. Your primary goal is to be helpful and accurate.
 
-Here is a summary of our conversation so far:
-{memory.load_memory_variables({})['summary']}
+            # Compose a single input string that includes persona, bot name, and RAG context
+            bot_name = persona.get("bot_name", "Assistant")
+            persona_desc = persona.get("persona", "helpful AI assistant")
+            composed_input = (
+                f"Bot name: {bot_name}.\n"
+                f"Persona: {persona_desc}.\n"
+                f"Relevant context (may be empty):\n{rag_context if rag_context else ''}\n\n"
+                f"Current Question: {query}"
+            )
 
-Here is our recent chat history:
-{memory.load_memory_variables({})['chat_history']}
+            # Invoke the chain with ONLY the new inputs for this turn
+            invoke_inputs = {"input": composed_input}
 
-Here is some relevant context from our previous discussions:
-{inputs['context']}
+            result = conversation_chain.invoke(invoke_inputs)
+            response_text = result.get("response") if isinstance(result, dict) else str(result)
 
-Current Question: {inputs['input']}
+            # Persist this turn's exchange to the database (memory is in-process only)
+            try:
+                self.database_service.add_message(conversation_id, "user", query)
+                self.database_service.add_message(conversation_id, "assistant", response_text)
+            except Exception as db_err:
+                logger.error(f"Error persisting messages to database: {db_err}")
 
-Please provide a helpful and accurate response based on the context and our conversation history."""
-            
-            logger.info(formatted_prompt)
-            logger.info("=" * 80)
-            logger.info(f"Prompt Stats: {len(formatted_prompt)} chars, ~{len(formatted_prompt.split())} words")
-            logger.info("=" * 80)
-            
-            # Invoke the conversation chain (LangChain handles memory automatically)
-            response = conversation_chain.predict(input=query)
-            
-            # Log the LLM response
-            logger.info("=" * 80)
-            logger.info("LLM RESPONSE:")
-            logger.info("=" * 80)
-            logger.info(response)
-            logger.info("=" * 80)
-            
-            # Generate and save conversation summary
-            self._update_conversation_summary(conversation_id, query, response)
-            
+            # Generate and save conversation summary (persisted summary)
+            self._update_conversation_summary(conversation_id, query, response_text)
+
             # Update vector service with new messages
-            self._update_vector_index(conversation_id, query, response)
+            self._update_vector_index(conversation_id, query, response_text)
             
             response_time = time.time() - start_time
             
             return {
-                "response": response,
+                "response": response_text,
                 "response_time": response_time,
                 "success": True,
-                "context_used": bool(context),
+                "context_used": bool(rag_context),
                 "model": model_name
             }
             
@@ -352,20 +351,19 @@ New Summary:"""
         except Exception as e:
             logger.error(f"Error updating conversation summary: {e}")
     
-    def validate_api_key(self, model_name: str = "gemini-2.0-flash-exp") -> bool:
+    def validate_api_key(self, model_name: str = "gemini-1.5-flash") -> bool:
         """Validate that the API key is working"""
         try:
-            # Temporarily change model if needed
-            original_model = self.llm.model
-            if model_name != original_model:
-                self.llm.model = model_name
+            # Create a test LLM instance with the specified model
+            test_llm = ChatGoogleGenerativeAI(
+                model=model_name,
+                google_api_key=os.getenv("GEMINI_API_KEY"),
+                temperature=0.7,
+                max_output_tokens=100
+            )
             
             # Test with a simple query
-            response = self.llm.invoke("Hello")
-            
-            # Restore original model
-            if model_name != original_model:
-                self.llm.model = original_model
+            response = test_llm.invoke("Hello")
             
             return True
         except Exception as e:

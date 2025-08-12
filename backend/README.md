@@ -97,9 +97,11 @@ Once the server is running, visit:
       "timestamp": "2025-01-11T10:30:05Z"
     }
   ],
-  "model": "gemini-1.5-flash",
-  "persona": "You are a helpful science tutor",
-  "temperature": 0.7
+  "persona": {
+    "bot_name": "ScienceTutor",
+    "persona": "You are a helpful science tutor",
+    "model": "gemini-2.0-flash-exp"
+  }
 }
 ```
 
@@ -108,9 +110,12 @@ Once the server is running, visit:
 ```json
 {
   "response": "Here's a detailed explanation...",
-  "model": "gemini-1.5-flash",
+  "model": "gemini-2.0-flash-exp",
   "response_time": 1.234,
-  "tokens_used": 150
+  "tokens_used": 150,
+  "conversation_id": "conv_123456",
+  "session_id": "sess_123456",
+  "context_used": true
 }
 ```
 

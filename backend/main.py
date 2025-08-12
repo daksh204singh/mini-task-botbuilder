@@ -41,7 +41,7 @@ async def lifespan(app: FastAPI):
         
         # Initialize Chain Service
         chain_service = ChainService(database_service, vector_service)
-        if not chain_service.validate_api_key():
+        if not chain_service.validate_api_key("gemini-1.5-flash"):
             raise ValueError("Invalid Gemini API key")
         logger.info("Chain service initialized")
         
@@ -115,7 +115,7 @@ async def root():
 async def health_check():
     return {
         "status": "healthy", 
-        "model": "gemini-2.0-flash-exp",
+        "model": "gemini-1.5-flash",
         "services": {
             "database": database_service is not None,
             "vector": vector_service is not None,
