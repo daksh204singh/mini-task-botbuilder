@@ -66,6 +66,8 @@ app.add_middleware(
         "http://localhost:3000",  # Local development
         os.getenv("FRONTEND_URL", "http://localhost:3000")  # Environment variable
     ],
+    # Allow all GitHub Pages origins like https://username.github.io
+    allow_origin_regex=r"^https:\/\/([A-Za-z0-9-]+)\.github\.io$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

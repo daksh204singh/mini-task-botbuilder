@@ -1,5 +1,11 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import rehypeHighlight from 'rehype-highlight';
+import 'katex/dist/katex.min.css';
+import 'highlight.js/styles/github.css';
 
 export interface Message {
   id: string;
@@ -40,7 +46,36 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
             message.text
           ) : (
             <div className="markdown-content">
-              <ReactMarkdown>{message.text}</ReactMarkdown>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm, remarkMath]}
+                rehypePlugins={[rehypeKatex, rehypeHighlight]}
+                components={{
+                  // Custom styling for tables
+                  table: ({node, ...props}) => (
+                    <div className="table-container">
+                      <table {...props} />
+                    </div>
+                  ),
+                  // Custom styling for code blocks
+                  code: ({node, className, children, ...props}: any) => {
+                    const match = /language-(\w+)/.exec(className || '');
+                    const isInline = !className || !match;
+                    return !isInline ? (
+                      <pre className={className}>
+                        <code className={className} {...props}>
+                          {children}
+                        </code>
+                      </pre>
+                    ) : (
+                      <code className={className} {...props}>
+                        {children}
+                      </code>
+                    );
+                  }
+                }}
+              >
+                {message.text}
+              </ReactMarkdown>
             </div>
           )}
         </div>

@@ -183,7 +183,15 @@ Conversation history (summarized as needed):
             # Get relevant context from vector service
             rag_context = self._get_relevant_context(conversation_id, query)
             
-            # Context retrieval logging disabled for performance
+            # Log context retrieval
+            # if rag_context:
+            #     logger.info("=" * 80)
+            #     logger.info("RELEVANT CONTEXT RETRIEVED:")
+            #     logger.info("=" * 80)
+            #     logger.info(rag_context)
+            #     logger.info("=" * 80)
+            # else:
+            #     logger.info("No relevant context found for this query")
             
             # Create ConversationChain with memory and prompt
             conversation_chain = ConversationChain(
@@ -209,7 +217,7 @@ Conversation history (summarized as needed):
             result = conversation_chain.invoke(invoke_inputs)
             response_text = result.get("response") if isinstance(result, dict) else str(result)
 
-            # Defer persistence and vector indexing to a background thread to reduce latency
+            # Defer DB persistence and vector indexing to background for lower latency
             threading.Thread(
                 target=self._post_turn_tasks,
                 args=(conversation_id, query, response_text),
@@ -326,22 +334,22 @@ Please create a new, concise summary (under 200 words) that:
 New Summary:"""
             
             # Log the summary generation prompt
-            logger.info("=" * 80)
-            logger.info("SUMMARY GENERATION PROMPT:")
-            logger.info("=" * 80)
-            logger.info(summary_prompt)
-            logger.info("=" * 80)
+            # logger.info("=" * 80)
+            # logger.info("SUMMARY GENERATION PROMPT:")
+            # logger.info("=" * 80)
+            # logger.info(summary_prompt)
+            # logger.info("=" * 80)
             
             # Generate new summary
             summary_response = self.llm.invoke(summary_prompt)
             new_summary = summary_response.content.strip()
             
             # Log the generated summary
-            logger.info("=" * 80)
-            logger.info("GENERATED SUMMARY:")
-            logger.info("=" * 80)
-            logger.info(new_summary)
-            logger.info("=" * 80)
+            # logger.info("=" * 80)
+            # logger.info("GENERATED SUMMARY:")
+            # logger.info("=" * 80)
+            # logger.info(new_summary)
+            # logger.info("=" * 80)
             
             # Save to database
             self.database_service.update_conversation_summary(
