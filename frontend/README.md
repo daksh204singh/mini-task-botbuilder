@@ -2,6 +2,17 @@
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
+## Deployment (GitHub Pages)
+
+Production is deployed to GitHub Pages via GitHub Actions. The backend URL is injected securely using a repository secret named `PROD_BACKEND_URL`.
+
+### Local development
+- `npm run dev` uses `http://localhost:8000`.
+- To point local dev to prod backend set `REACT_APP_USE_PROD_BACKEND=true` and run `npm run dev:prod`.
+
+### Production build
+The build reads `REACT_APP_BACKEND_URL`. In CI, it's provided from `secrets.PROD_BACKEND_URL`.
+
 ## Available Scripts
 
 In the project directory, you can run:
