@@ -64,6 +64,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",  # Local development
+        "https://daksh204singh.github.io",  # GitHub Pages
         os.getenv("FRONTEND_URL", "http://localhost:3000")  # Environment variable
     ],
     # Allow all GitHub Pages origins like https://username.github.io
