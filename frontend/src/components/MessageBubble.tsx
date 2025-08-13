@@ -33,7 +33,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
       {!message.isUser && (
         <div className="bot-avatar">
           <img 
-            src="/assets/AIRobot.jpg" 
+            src={`${process.env.PUBLIC_URL}/assets/AIRobot.jpg`} 
             alt="Bot Avatar" 
             className="robot-icon-small"
           />
