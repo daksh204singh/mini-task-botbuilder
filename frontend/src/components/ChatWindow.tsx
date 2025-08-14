@@ -74,7 +74,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, isLoading }) => {
       <div className="messages-container">
         {messages.length === 0 && !isLoading ? (
           <div className="empty-state">
-            <div className="empty-icon">🤖</div>
             <h3>Welcome to TutorBot</h3>
             <p>Start a conversation with your AI tutor. Ask questions, get explanations, or explore any topic you'd like to learn about.</p>
           </div>
@@ -85,13 +84,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, isLoading }) => {
             ))}
             {isLoading && (
               <div className="message-bubble bot-message">
-                <div className="bot-avatar">
-                  <img 
-                    src="/assets/colorizeAnimationTest3.gif" 
-                    alt="Bot Avatar" 
-                    className="robot-icon-small"
-                  />
-                </div>
                 <div className="message-content">
                   <div className="typing-indicator">
                     <span></span>
