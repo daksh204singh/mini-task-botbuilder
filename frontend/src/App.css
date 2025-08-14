@@ -262,7 +262,7 @@ body {
   width: 100%;
   max-width: 1200px;
   margin: 0 auto;
-  position: relative;
+  position: static;
 }
 
 .header-left {
@@ -270,6 +270,8 @@ body {
   align-items: center;
   position: absolute;
   left: 0;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .mobile-menu-button {
@@ -326,7 +328,9 @@ body {
   display: flex;
   align-items: center;
   position: absolute;
-  right: 0;
+  right: 32px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .logs-button {
@@ -1143,28 +1147,16 @@ body {
   }
   
   .logs-button {
-    display: flex;
-    position: absolute;
-    right: 0;
-    top: 50%;
-    transform: translateY(-50%);
+    display: none;
   }
   
   .header-left {
     position: relative;
   }
   
-  .header-right {
-    position: absolute;
-    right: 0;
-    top: 50%;
-    transform: translateY(-50%);
-  }
-  
   .app-header {
     padding: 12px 20px;
     min-height: 60px;
-    position: relative;
   }
   
   .chat-window {
