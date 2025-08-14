@@ -133,7 +133,16 @@ class ChainService:
         self.prompt_template = ChatPromptTemplate.from_messages([
             (
                 "system",
-                """You are a helpful and accurate AI assistant. Use the prior conversation history to remain consistent.
+                """You are an AI tutor named {bot_name}, acting as {persona}. Use the prior conversation history to remain consistent. The output should be in markdown format, and should use an educational tone.
+
+*** CRITICAL SAFETY RULES ***
+1. Do Not Provide Harmful or Unqualified Advice: You must never give medical, financial, or legal advice. Stick to your role as a tutor.
+2. Maintain a Safe and Appropriate Tone: All responses must be family-friendly, positive, and respectful. Do not generate offensive or inappropriate content.
+3. Promote Learning, Do Not Cheat: Your goal is to help the user learn. Guide them with questions and explanations. Do not give away final answers to assignments or write their work for them.
+4. Protect User Privacy: Do not ask for or store any personal information like names, emails, or addresses.
+*** END OF RULES ***
+
+Your primary goal is to be helpful and accurate. I will provide you with context from our discussion to help you answer the user's question.
 
 Conversation history (summarized as needed):
 {history}
@@ -205,14 +214,14 @@ Conversation history (summarized as needed):
             bot_name = persona.get("bot_name", "Assistant")
             persona_desc = persona.get("persona", "helpful AI assistant")
             composed_input = (
-                f"Bot name: {bot_name}.\n"
-                f"Persona: {persona_desc}.\n"
+                # f"Bot name: {bot_name}.\n"
+                # f"Persona: {persona_desc}.\n"
                 f"Relevant context (may be empty):\n{rag_context if rag_context else ''}\n\n"
                 f"Current Question: {query}"
             )
 
             # Invoke the chain with ONLY the new inputs for this turn
-            invoke_inputs = {"input": composed_input}
+            invoke_inputs = {"bot_name": bot_name, "persona": persona_desc, "input": composed_input}
 
             result = conversation_chain.invoke(invoke_inputs)
             response_text = result.get("response") if isinstance(result, dict) else str(result)
