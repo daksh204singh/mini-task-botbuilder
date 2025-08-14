@@ -1143,16 +1143,28 @@ body {
   }
   
   .logs-button {
-    display: none;
+    display: flex;
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
   }
   
   .header-left {
     position: relative;
   }
   
+  .header-right {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+  
   .app-header {
     padding: 12px 20px;
     min-height: 60px;
+    position: relative;
   }
   
   .chat-window {
