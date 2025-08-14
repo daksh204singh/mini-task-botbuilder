@@ -129,27 +129,7 @@ class ChainService:
             max_output_tokens=2048
         )
         
-        # Create the prompt template using only {history} and {input} to be compatible with ConversationChain
-        self.prompt_template = ChatPromptTemplate.from_messages([
-            (
-                "system",
-                """You are an AI tutor named {bot_name}, acting as {persona}. Use the prior conversation history to remain consistent. The output should be in markdown format, and should use an educational tone.
-
-*** CRITICAL SAFETY RULES ***
-1. Do Not Provide Harmful or Unqualified Advice: You must never give medical, financial, or legal advice. Stick to your role as a tutor.
-2. Maintain a Safe and Appropriate Tone: All responses must be family-friendly, positive, and respectful. Do not generate offensive or inappropriate content.
-3. Promote Learning, Do Not Cheat: Your goal is to help the user learn. Guide them with questions and explanations. Do not give away final answers to assignments or write their work for them.
-4. Protect User Privacy: Do not ask for or store any personal information like names, emails, or addresses.
-*** END OF RULES ***
-
-Your primary goal is to be helpful and accurate. I will provide you with context from our discussion to help you answer the user's question.
-
-Conversation history (summarized as needed):
-{history}
-""",
-            ),
-            ("human", "{input}")
-        ])
+       
         
         logger.info("ChainService initialized successfully")
     
@@ -202,27 +182,45 @@ Conversation history (summarized as needed):
             # else:
             #     logger.info("No relevant context found for this query")
             
-            # Create ConversationChain with memory and prompt
-            conversation_chain = ConversationChain(
-                llm=llm,
-                prompt=self.prompt_template,
-                memory=memory,
-                verbose=False,
-            )
-
+            
             # Compose a single input string that includes persona, bot name, and RAG context
-            bot_name = persona.get("bot_name", "Assistant")
-            persona_desc = persona.get("persona", "helpful AI assistant")
+            bot_name = persona.get("bot_name", "AI Tutor")
+            persona_desc = persona.get("persona", "helpful AI Tutor")
             composed_input = (
                 # f"Bot name: {bot_name}.\n"
                 # f"Persona: {persona_desc}.\n"
                 f"Relevant context (may be empty):\n{rag_context if rag_context else ''}\n\n"
                 f"Current Question: {query}"
             )
-
+            # Create the prompt template using only {history} and {input} to be compatible with ConversationChain
+            system_content = (
+                f"You are an AI tutor named {bot_name}, acting as {persona_desc}. "
+                "Use the prior conversation history to remain consistent. "
+                "The output should be in markdown format, and should use an educational tone.\n\n"
+                "*** CRITICAL SAFETY RULES ***\n"
+                "1. Do Not Provide Harmful or Unqualified Advice: You must never give medical, financial, or legal advice. Stick to your role as a tutor.\n"
+                "2. Maintain a Safe and Appropriate Tone: All responses must be family-friendly, positive, and respectful. Do not generate offensive or inappropriate content.\n"
+                "3. Promote Learning, Do Not Cheat: Your goal is to help the user learn. Guide them with questions and explanations. Do not give away final answers to assignments or write their work for them.\n"
+                "4. Protect User Privacy: Do not ask for or store any personal information like names, emails, or addresses.\n"
+                "*** END OF RULES ***\n\n"
+                "Your primary goal is to be helpful and accurate. I will provide you with context from our discussion to help you answer the user's question.\n\n"
+                "Conversation history (summarized as needed):\n{history}\n"
+            )
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", system_content),
+                ("human", "{input}")
+            ])
+            
+            
+            # Create ConversationChain with memory and prompt
+            conversation_chain = ConversationChain(
+                llm=llm,
+                prompt=prompt,
+                memory=memory,
+                verbose=False,
+            )
             # Invoke the chain with ONLY the new inputs for this turn
-            invoke_inputs = {"bot_name": bot_name, "persona": persona_desc, "input": composed_input}
-
+            invoke_inputs = {"input": composed_input}
             result = conversation_chain.invoke(invoke_inputs)
             response_text = result.get("response") if isinstance(result, dict) else str(result)
 
