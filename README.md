@@ -1,4 +1,4 @@
-# Mini-task Chatbot — Engineering Report
+# Mini-task Chatbot
 
 This document records the design and implementation work behind a conversational AI prototype built under mini-task constraints. The goal was to provide fast, contextually grounded tutoring-style assistance with clear persona control and basic safety.
 
