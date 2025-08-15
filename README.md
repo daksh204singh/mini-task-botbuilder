@@ -18,7 +18,7 @@ This document records the design and implementation work behind a conversational
 
 ## Iterations and Key Decisions
 
-- Iteration 1: Frontend-only, full-history prompting
+- Iteration 1: Full-history prompting
   - The client pushed the entire message history to the LLM every turn.
   - Response quality was strong due to full context, but it did not scale. Input sizes grew each turn, increasing latency and token costs, and hitting model context limits.
 
